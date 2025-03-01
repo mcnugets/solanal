@@ -1,0 +1,25 @@
+{
+    "scraper_settings": {
+        "base_url": "https://pump.fun/advanced",
+        "timeout": 20,
+        "retry_attempts": 3,
+        "headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+    },
+    "table_settings": {
+        "table_class": "w-full table-fixed min-w-[1490px]",
+        "columns": [
+            "symbol",
+            "market_cap",
+            "volume",
+            "other_data"
+        ]
+    },
+    "output_settings": {
+        "format": "json",
+        "save_to_file": true,
+        "output_directory": "./data",
+        "filename_prefix": "coin_data_"
+    }
+}
