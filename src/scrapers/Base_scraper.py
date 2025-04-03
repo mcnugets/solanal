@@ -14,68 +14,13 @@ from selenium.common.exceptions import (
     StaleElementReferenceException,
     NoSuchWindowException,
 )
-from typing import Tuple, Literal, Annotated
+from typing import Tuple, Literal, Annotated, Optional, List, Any, Union
 from collections import deque
 from selenium.webdriver.common.by import By as LocatorType
 import logging
 from abc import abstractmethod
-
-# a data
-# b data
-# c data
-
-
-# a data
-class CSVLoaderMixin:
-
-    def load_csv_to_deque(self):
-        """Load CSV data into the deque."""
-        while not self.input_queue.empty():
-            print("activtated")
-            logging.info("IN load_csv_to_deque")
-            try:
-
-                # Get the parent directory using pathlib
-                parent_directory = Path(__file__).resolve().parent.parent
-
-                # Debug: Print the parent directory
-                print(f"Parent directory: {parent_directory}")
-
-                # Construct the full path to the CSV file
-                csv_file = parent_directory / self.csv_path
-
-                # Debug: Print the constructed CSV path
-                print(f"Constructed CSV path: {csv_file}")
-                data = self.input_queue.get()
-                self.inner_queue.put(data)
-                logging.info(f"DATA ADDED FROM THE PASSED QUEUE: {data}")
-                address = data[0]["full_address"]
-
-                self.deque = deque(address, maxlen=100)
-                # if csv_file.exists():
-                #     try:
-                #         df = pd.read_csv(
-                #             csv_file,
-                #             encoding="ISO-8859-1",
-                #             dtype=str,
-                #             on_bad_lines="error",
-                #         )
-                #         # add elements from queue??
-                #         data = self.output_queue.get()
-                #         self.input_queue.put(data)
-                #         address = data["full_address"]
-                #         self.deque = deque(address, maxlen=100)
-
-                #     except Exception as e:
-                #         print(e)
-                # else:
-                #     logging.warning(
-                #         f"CSV file does not exist: {self.csv_path}. Waiting for file..."
-                #     )
-                # time.sleep(10)  # Wait for 10 seconds before checking again
-            except Exception as e:
-                logging.error(f"Error loading CSV: {e}")
-                return
+from pydantic import BaseModel
+from ..data.models import Pair_data
 
 
 # "https://gmgn.ai/sol/token/"
@@ -118,6 +63,38 @@ class Base_scraper:
         self.popup_locator = popup_locator
         self.row_locator = row_locator
 
+        self.__deque = deque(maxlen=100)
+        # self.__deque = TrackedDeque(
+        #     maxlen=100,
+        #     on_change=self._on_deque_change,
+        #     validate=self._validate_deque_item,
+        # )
+
+    @property
+    def _deque(self) -> deque:
+        return self.__deque
+
+    @_deque.setter
+    def _deque(self, value: deque):
+        """
+        Set the deque value with validation
+
+        Args:
+            value: New deque value (deque or list of tuples)
+        """
+        if isinstance(value, deque):
+            self._deque = value
+        elif isinstance(value, list):
+            new_deque = deque(maxlen=self._deque.maxlen)
+            for item in value:
+                if isinstance(item, tuple) and len(item) == 2:
+                    new_deque.append(item)
+                else:
+                    raise ValueError(f"Invalid item in list: {item}")
+            self._deque = new_deque
+        else:
+            raise TypeError(f"Invalid deque type: {type(value)}")
+
     def pre_scraping_hook(self):
         """Hook to run before the loop starts. Default: do nothing."""
         pass
@@ -130,8 +107,14 @@ class Base_scraper:
         pass
 
     @abstractmethod
-    def _scrape_data(self):
+    def _scrape_data(self) -> Pair_data | None:
         pass
+
+    # TODO: future note to myself: create pydantic model for the data
+    def pair_data(
+        self, raw_data: str | List, old_data: Optional[List] = None
+    ) -> Pair_data:
+        return Pair_data(raw_data=raw_data, old_data=old_data)
 
     def setup_driver(self):
         try:
@@ -163,6 +146,7 @@ class Base_scraper:
                     "download.directory_upgrade": True,
                     "safebrowsing.enabled": True,
                 }
+                self.options.add_argument("--disable-popup-blocking")
 
                 self.options.add_experimental_option("prefs", prefs)
 
@@ -188,14 +172,16 @@ class Base_scraper:
                 "description": "Tuple containing locator type and selector string for main element"
             },
         ],
+        wait_time: int = 10,
     ):
 
         try:
             time.sleep(5)
             # Wait for data to load
-            element = WebDriverWait(self.driver, 10).until(
+            element = WebDriverWait(self.driver, wait_time).until(
                 EC.presence_of_element_located(locator)
             )
+
             return element
         except Exception as e:
             print(f"Error loading element: {e}")

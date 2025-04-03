@@ -1,6 +1,45 @@
+"""
+Solana Meme Coin Analysis System using Local LLM
+==============================================
+
+This module provides an analytical pipeline for Solana meme coins using a local LLM (Language Learning Model).
+It processes token data, holder information, and market metrics to generate detailed trading insights.
+
+Key Components:
+-------------
+- LLM Analysis: Uses Ollama for local LLM processing
+- Data Processing: Handles multiple data sources (token data, holder info)
+- Structured Output: Generates organized analysis with rankings and metrics
+
+Main Features:
+------------
+1. Multi-source data integration
+2. Quantitative metrics calculation
+3. Holder pattern analysis
+4. Trend prediction
+5. Risk assessment
+6. Success probability estimation
+
+Usage:
+-----
+```python
+data_processor = llm_data_processor(files, batch_size=10)
+analyser = llm_analyser(model="deepseek-r1:7b", llm_data_processor=data_processor)
+for analysis in analyser.analyse():
+    print(analysis)
+```
+
+Dependencies:
+-----------
+- ollama: For LLM operations
+- pandas: For data manipulation
+- logging: For operation tracking
+- pathlib: For file path handling
+"""
+
 # TODO: we can expand the logic of the analysis, to integrate additional statistical
 # models to output more accurate analysis
-from LLM_data_processor import llm_data_processor
+from .LLM_data_processor import llm_data_processor
 import os
 import logging
 import pandas as pd
@@ -9,11 +48,31 @@ from typing import Dict, Any
 import ollama  # Ensure you have installed the Ollama Python library
 from typing import Optional, List, Dict
 
+from src import ScraperLogger as logger
+from src import valid_data
+from collections import deque
+
 
 class llm_analyser:
-    def __init__(self, model: str, llm_data_processor: llm_data_processor):
+    def __init__(
+        self,
+        model: str,
+        logger: logger,
+        llm_data_processor: llm_data_processor,
+        batch_size: int,
+    ):
         self.model = model
         self.ldp = llm_data_processor
+        self.logger = logger
+        """
+        possibly would requier in the future for batch processsing
+        """
+        # self.deque = deque
+        # self.deque = deque(maxlen=10)
+        self.conversation_history = []
+        self.temp_conversation_history = []
+        self.assistant_input = None
+        self.batch_size = batch_size
 
     # if "token_data" in data.keys():
     #     print(f"Address: {data['token_data'].get('full_address')}")
@@ -25,46 +84,97 @@ class llm_analyser:
     # if data["holders"]:
     #     print(f"\nHolders Info: {len(data['holders'])} holders found")
 
-    def analyse(self):
+    def analyse(self, data):
+        if not data:
+            raise ValueError("Ting is None which means no data")
 
-        assistant_input = None
-        conversation_history = []
-        for token_data in self.ldp.load_data():
+        try:
+            processed_data = self.ldp.process_data(data)
+            prompt = self.user_prompt(processed_data)
+            _input = self.complete_prompt(
+                prompt, self.assistant_input, self.conversation_history
+            )
 
-            prompt = self.user_prompt(token_data)
-            _input = self.complete_prompt(prompt, assistant_input, conversation_history)
-
+            self.save_analysis(_input[-1], batched_data=self.batch_size)
             logging.info("Sending prompt to LLM model...")
-            try:
+            print("Sending prompt to LLM model...")
 
-                response = ollama.chat(model=self.model, messages=_input)
-                analysis = response.message
-                msg_arr = analysis.content.split("</think>")
-                msg = msg_arr[1]
-                assistant_input = msg
+            response = ollama.chat(model=self.model, messages=_input)
+            analysis = response.message
+            msg_arr = analysis.content.split("</think>")
+            msg = msg_arr[1]
+            self.assistant_input = msg
 
-                logging.info("Analysis received successfully")
-                logging.info(response.done_reason)
-                logging.info(f"Eval count:{response.eval_count}")
-                logging.info(f"Eval dur:{response.eval_duration}")
-                logging.info(f"Eval prompt count:{response.prompt_eval_count}")
-                logging.info(f"Eval prompt dur:{response.prompt_eval_duration}")
+            logging.info("Analysis received successfully")
+            logging.info(response.done_reason)
+            logging.info(f"Eval count:{response.eval_count}")
+            logging.info(f"Eval dur:{response.eval_duration}")
+            logging.info(f"Eval prompt count:{response.prompt_eval_count}")
+            logging.info(f"Eval prompt dur:{response.prompt_eval_duration}")
 
-                yield msg
-            except Exception as e:
-                logging.error(f"LLM analysis error: {e}")
-                return "Error in LLM analysis."
+            return msg
+        except Exception as e:
+            logging.error(f"LLM analysis() in LLM_processor error: {e}")
+            raise RuntimeError(f"Error in LLM analysis(): {str(e)}")
+
+    def save_analysis(self, last_added_data, batched_data):
+        try:
+            self.temp_conversation_history.append(last_added_data)
+            if len(self.temp_conversation_history) == batched_data:
+                saved_batch = pd.DataFrame(self.temp_conversation_history)
+                check_file = Path("conversation_history.json")
+                new_batches = saved_batch
+
+                if check_file.exists():
+                    try:
+                        get_saved_batches = pd.read_json("conversation_history.json")
+                        new_batches = pd.concat(
+                            [get_saved_batches, saved_batch], ignore_index=True
+                        )
+                    except ValueError as e:
+                        logging.error(f"Error reading JSON file: {e}")
+                        return
+                    except pd.errors.EmptyDataError:
+                        logging.error("JSON file is empty")
+                        return
+
+                try:
+                    self.temp_conversation_history.clear()
+                    new_batches.to_json("conversation_history.json")
+                except IOError as e:
+                    logging.error(f"Error saving to JSON file: {e}")
+
+        except Exception as e:
+            logging.error(f"Unexpected error in save_analysis: {e}")
 
     def complete_prompt(
         self, user_prompt: Dict, assistant_prompt, conversation_h: List
-    ):
-        if not conversation_h:
-            conversation_h.append(self.system_prompt())
-        if assistant_prompt:
-            assistant = {"role": "assistant", "content": assistant_prompt}
-            conversation_h.append(assistant)
-        conversation_h.append(user_prompt)
-        return conversation_h
+    ) -> List[Dict]:
+
+        try:
+            if not isinstance(conversation_h, list):
+                raise TypeError("conversation_h must be a list")
+
+            if not isinstance(user_prompt, dict):
+                raise ValueError("user_prompt must be a dictionary")
+
+            if not conversation_h:
+                conversation_h.append(self.system_prompt())
+
+            if assistant_prompt:
+                assistant = {"role": "assistant", "content": assistant_prompt}
+                conversation_h.append(assistant)
+
+            conversation_h.append(user_prompt)
+
+            return conversation_h
+
+        except (TypeError, ValueError) as e:
+            logging.error(f"Error in complete_prompt: {str(e)}")
+            raise
+        except Exception as e:
+            logging.error(f"Unexpected error in complete_prompt: {str(e)}")
+            raise
 
     def system_prompt(self) -> Dict:
         system_prompt = """
@@ -73,23 +183,16 @@ class llm_analyser:
                         """
         return {"role": "system", "content": system_prompt}
 
-    def user_prompt(self, data):
-        gen_data = data["token_data"]
-        d_data = data["more_token_data"]
-        holders = data["holders"]
-        print(f'ticekr: {gen_data["ticker "]} {d_data["ticker"]}')
+    def user_prompt(self, data: str) -> Dict:
 
-        user_prompt = """
+        user_prompt = f"""
                   
                     Solana Meme Coin Analysis Data:
                     **NOTE**: 3 days of holding max. Recommend holding duration in this timeframe from minutes to days.
-                    === Token Data ===
-                    {}
-                    === Additional Token Data ===
-                    {}
-                    === Holders Data ===
-                    Analyze holder addresses to identify patterns:
-                    {}
+                    
+                    **Input Data:**
+                    {data}
+
 
                     Instructions:
 
@@ -114,9 +217,7 @@ class llm_analyser:
                         * ATH Potential Analysis.
 
                     Emphasis:  Provide data-driven, objective analysis with clear justifications. Avoid vague statements and focus on actionable, data-based insights. Be short and concise
-                    """.format(
-            gen_data, d_data, holders
-        )
+                    """
         return {"role": "user", "content": user_prompt}
 
 

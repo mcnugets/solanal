@@ -1,4 +1,4 @@
-from src.Base_scraper import Base_scraper
+from .Base_scraper import Base_scraper
 from typing import Annotated, Tuple, Optional
 from selenium.webdriver.common.by import By
 from selenium.common.exceptions import (
@@ -98,10 +98,14 @@ class pumpfun_processor(Base_scraper):
 
     # (By.TAG_NAME, "tr")
     def _scrape_data(self):
-        locator, element = self.row_locator
-        rows = self.table.find_elements(locator, element)
-        print("works")
         try:
+            if self.table is None:
+                logging.error("Table not found, exiting...")
+                print("Table not found, exiting...")
+                return
+            locator, element = self.row_locator
+            rows = self.table.find_elements(locator, element)
+            print("works")
 
             for row in rows:
                 # /html/body/div[1]/main/div[1]/main/div/div[3]/div[2]/div/div/table/tbody/tr[1]/td[1]
@@ -133,7 +137,7 @@ class pumpfun_processor(Base_scraper):
                     )
                     print(f"{Fore.CYAN}---------------------{Style.RESET_ALL}")
 
-                    yield temp_str
+                    yield self.pair_data(raw_data=temp_str)
                 except StaleElementReferenceException:
                     print("Stale element encountered, re-locating...")
 
@@ -145,6 +149,7 @@ class pumpfun_processor(Base_scraper):
 
         except Exception as e:
             print(f"There was an error in data scraping {e}")
+            logging.error(f"An error occurred during data scraping: {e}")
 
         finally:
             pass

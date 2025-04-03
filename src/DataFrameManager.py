@@ -1,5 +1,5 @@
 import pandas as pd
-from typing import List, Optional
+from typing import List, Optional, Dict
 from datetime import datetime
 import logging
 from pathlib import Path
@@ -33,7 +33,7 @@ class DataFrameManager:
             format="%(asctime)s - %(levelname)s - %(message)s",
         )
 
-    def process_data(self, data: List[str], columnname: str) -> None:
+    def process_data(self, data: List[str], columnname: str) -> Dict:
         try:
             # Convert list to DataFrame row
             row_dict = dict(zip(self.columns, data))
@@ -52,10 +52,10 @@ class DataFrameManager:
             logging.info(f"Added row. Row details: {len(self.df)}")
 
             # Save checkpoint every 100 rows
-            if len(self.df) % 25 == 0:
+            if len(self.df) % 1 == 0:
                 self.clean_dataframe(columnname=columnname)
                 self.save_checkpoint()
-
+            return new_row.to_dict()
         except Exception as e:
             logging.error(f"Error processing data: {e}")
 
@@ -85,14 +85,14 @@ class DataFrameManager:
             updated_df.to_csv(base_file, index=False, quoting=csv.QUOTE_ALL)
 
             # Save backup with timestamp
-            backup_base_file = base_file + "_backup"
-            backup_csv = f"{backup_base_file}_{timestamp}.csv"
-            backup_excel = f"{backup_base_file}_{timestamp}.xlsx"
-            updated_df.to_csv(backup_csv, index=False)
-            updated_df.to_excel(backup_excel, index=False)
+            # backup_base_file = base_file + "_backup"
+            # backup_csv = f"{backup_base_file}_{timestamp}.csv"
+            # backup_excel = f"{backup_base_file}_{timestamp}.xlsx"
+            # updated_df.to_csv(backup_csv, index=False)
+            # updated_df.to_excel(backup_excel, index=False)
 
-            logging.info(f"Saved {len(updated_df)} rows to {base_file}")
-            logging.info(f"Backup created: {backup_csv}")
+            # logging.info(f"Saved {len(updated_df)} rows to {base_file}")
+            # logging.info(f"Backup created: {backup_csv}")
 
         except Exception as e:
             logging.error(f"Error saving checkpoint: {e}")

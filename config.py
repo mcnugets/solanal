@@ -1,13 +1,11 @@
 from selenium.webdriver.common.by import By
 from queue import Queue
-from queue_manager import queue_manager
-
+from src import queue_manager, Pair_data
 
 queue_m = queue_manager()
 
 queue_m.add_queue(["gmgn", "gmgn2", "solscan"])
-que = Queue()
-
+queue_m.add_queue(["compiled", "final"])  # Add new queue for compiled data
 
 driver_path = r"C:\Users\sulta\AppData\Local\Programs\Python\Python310\lib\site-packages\chromedriver_autoinstaller\133\chromedriver.exe"
 configs = {
@@ -30,7 +28,7 @@ configs = {
         "type": "pumpfun",
         "url": "https://gmgn.ai/new-pair/tCkVIIwp?chain=sol",
         "row_locator": (By.CLASS_NAME, "g-table-row"),
-        "popup_locator": (By.XPATH, "/html/body/div[3]/div/div[3]"),
+        "popup_locator": (By.XPATH, "/html/body/div[2]/div/div[3]"),
         "main_locator": (
             By.XPATH,
             "/html/body/div[1]/div/div/main/div[2]/div/div[2]/div[1]/div/div[1]/div[3]/div/div/div/div/div/div[1]/div/div",
@@ -41,12 +39,10 @@ configs = {
         "type": "gmgn",
         "url": "https://gmgn.ai/sol/token/",
         "row_locator": (By.CLASS_NAME, "css-1jy8g2v"),
-        "popup_locator": (By.XPATH, "/html/body/div[3]/div/div[3]"),
+        "popup_locator": (By.XPATH, "/html/body/div[2]/div/div[3]"),
         "driver_path": driver_path,
         "main_locator": (By.CLASS_NAME, "css-1jy8g2v"),
         "csv_path": "pumpfun_data.csv",
-        "input_queue": queue_m.get_queue("gmgn2")["output_queue"],
-        "inner_queue": queue_m.get_queue("gmgn")["inner_queue"],
     },
     "solscan": {
         "type": "solscan",
@@ -56,12 +52,10 @@ configs = {
         "driver_path": driver_path,
         "main_locator": (
             By.XPATH,
-            "/html/body/div/div[1]/div[3]/div[1]/div[2]/div[2]/div[2]/div/div[5]/div/div/div[1]/div/button",
+            "/html/body/div/div[1]/div[3]/div[1]/div[2]/div[2]/div[2]/div[2]/div/div[5]/div/div/div[1]/div/button",
         ),
         "csv_path": "pumpfun_data.csv",
         "download_path": "holders",
-        "input_queue": queue_m.get_queue("gmgn")["output_queue"],
-        "inner_queue": queue_m.get_queue("solscan")["inner_queue"],
     },
 }
 
@@ -141,6 +135,8 @@ patterns = {
         ">": "",
         "Safe": "",
         "Share": "",
+        "Taxes": "",
+        "Dex": "",
     },
     "patterns_gmgn_2": {
         "Liq": "",  # Removes "MC"
