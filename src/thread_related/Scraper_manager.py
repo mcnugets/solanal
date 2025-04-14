@@ -12,6 +12,9 @@ from src.scrapers.PumpFun_processor import pumpfun_processor
 from src.scrapers.solscan_scraper import solscan_processor
 
 
+from src.thread_related.scraper_threaders.Ithreader import Ithreader
+
+
 class Scraper_Manager:
 
     def __init__(self, logger: ScraperLogger, shared_state: Dict):
@@ -78,6 +81,17 @@ class Scraper_Manager:
             shared_state=self.shared_state,
         )
         self.scrapers.append(scraper_thread)
+
+    def add_scraper_v2(self, threader: Ithreader) -> None:
+
+        try:
+            self.scrapers.append(threader)
+            self.logger.log_info(f"Added new scraper threader: {threader.name}")
+        except Exception as e:
+            self.logger.log_error(
+                error_msg=f"Error adding new scraper threader: {threader.name}",
+                exc_info=e,
+            )
 
     def start_all(self):
 
