@@ -17,10 +17,10 @@ from src.thread_related.scraper_threaders.Ithreader import Ithreader
 
 class Scraper_Manager:
 
-    def __init__(self, logger: ScraperLogger, shared_state: Dict):
+    def __init__(self, logger: ScraperLogger, shared_state: Dict = None):
 
         self.shared_condition = Condition()
-        self.scrapers: List[Scraper_Threading] = []
+        self.scrapers: List[Scraper_Threading | Ithreader] = []
         self.logger = logger
         self.shared_event = Event()
         self.shared_lock = Lock()
@@ -92,6 +92,13 @@ class Scraper_Manager:
                 error_msg=f"Error adding new scraper threader: {threader.name}",
                 exc_info=e,
             )
+
+    def start(self):
+        for scraper in self.scrapers:
+            scraper.start()
+
+        # self.scraper_thread = self._init_scraper()
+        # self.scraper_thread.start()
 
     def start_all(self):
 

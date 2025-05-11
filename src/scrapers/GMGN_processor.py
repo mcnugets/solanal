@@ -9,6 +9,7 @@ import time
 import pandas as pd
 from selenium.webdriver.common.by import By
 from ..data.models import DequeChange
+from src.data.models import Address_Data as ad
 
 
 class gmgn_processor(Base_scraper):
@@ -47,23 +48,25 @@ class gmgn_processor(Base_scraper):
 
                 logging.info("GMGN works")
                 print("GMGN works")
-                (old_data, address) = self._deque.pop()
-                self.fetch_url(address)
+                address_data: ad = self._deque.pop()
+                self.fetch_url(address_data.address)
                 self.handle_popup()
 
                 try:
                     time.sleep(5)
 
                     row = self._get_element(locator=self.row_locator)
-                    row = row.text + "#" + address
-                    yield self.pair_data(raw_data=row, old_data=old_data)
+                    row = row.text + "#" + address_data.address
+                    address_data.data = row
+                    yield address_data
+
                     # yield row
 
                     # print(f"Fetched data for {address}")
 
                 except Exception as e:
-                    print(f"Error fetching {address}: {e}")
-                    logging.error(f"Error fetching {address}: {e}")
+                    print(f"Error fetching {address_data.address}: {e}")
+                    logging.error(f"Error fetching {address_data.address}: {e}")
                     # continue
 
             # else:

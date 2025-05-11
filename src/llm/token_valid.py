@@ -13,7 +13,7 @@ class token_data_validator:
             holders = self.validate_holders(data["holders"])
             dict_data = {
                 "pumpfun_data": gmgn_main,
-                "gmgn_data": gmgn_data,
+                "gmgn_data_": gmgn_data,
                 "holders": holders,
             }
             data = valid_data(**dict_data)

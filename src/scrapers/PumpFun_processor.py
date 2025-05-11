@@ -73,6 +73,7 @@ class pumpfun_processor(Base_scraper):
                 "description": "Tuple containing locator type and selector string for main element"
             },
         ],
+        extra_locator,
         url,
         div_locator: Optional[Tuple] = None,
     ):
@@ -82,14 +83,18 @@ class pumpfun_processor(Base_scraper):
             row_locator=row_locator,
             popup_locator=popup_locator,
             url=url,
+            extra_locator=extra_locator,
         )
         self.table = None
         self.div_locator = div_locator
+        self.seen = set()
 
     def setup_website(self):
         try:
             self.fetch_url()
             self.handle_popup()
+            if self.extra_locator:
+                self.handle_extra()
             self.table = self.load_html_element()
             logging.info("Website setup completed successfully.")
         except Exception as e:
@@ -105,6 +110,7 @@ class pumpfun_processor(Base_scraper):
                 return
             locator, element = self.row_locator
             rows = self.table.find_elements(locator, element)
+
             print("works")
 
             for row in rows:
@@ -125,27 +131,32 @@ class pumpfun_processor(Base_scraper):
                         continue
 
                     temp_str = first_cell.text
-
+                
                     if link_element:
                         href = link_element[0].get_attribute("href")
                         address = href.split("/")[-1]
                         temp_str += "#" + address
+                    if address in self.seen:
+                        print(f"already seen: {address} Skipping..")
+                        continue
+                    self.seen.add(address)
 
-                    print(f"{Fore.CYAN}---------------------{Style.RESET_ALL}")
-                    print(
-                        f"{Fore.LIGHTGREEN_EX}RAW TEXT RETRIEVED: {temp_str}{Style.RESET_ALL}"
-                    )
-                    print(f"{Fore.CYAN}---------------------{Style.RESET_ALL}")
+                    # print(f"{Fore.CYAN}---------------------{Style.RESET_ALL}")
+                    # print(
+                    #     f"{Fore.LIGHTGREEN_EX}RAW TEXT RETRIEVED: {temp_str}{Style.RESET_ALL}"
+                    # )
+                    # print(f"{Fore.CYAN}---------------------{Style.RESET_ALL}")
 
-                    yield self.pair_data(raw_data=temp_str)
+                    yield self.validate_unprocessed(data=temp_str, address=address)
                 except StaleElementReferenceException:
                     print("Stale element encountered, re-locating...")
+                    # time.sleep(5)
 
                     continue
                 except NoSuchWindowException:
                     print("Window already closed, breaking out of loop.")
                     break
-            time.sleep(5)
+            # time.sleep(5)
 
         except Exception as e:
             print(f"There was an error in data scraping {e}")

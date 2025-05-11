@@ -16,7 +16,7 @@ from selenium.common.exceptions import (
     StaleElementReferenceException,
     NoSuchWindowException,
 )
-import asyncio
+from src.data.models import Address_Data as ad
 
 # import aiohttp
 
@@ -53,13 +53,16 @@ class solscan_processor(Base_scraper):
 
         while len(self._deque) > 0:
             logging.info("SOLSCAN SAVING HOLDER INFO")
-            (old_data, address) = self._deque.pop()
-            print(f"checking the token address: {address}")
-            self.fetch_url(address + r"#holders")
+            address_data: ad = self._deque.pop()
+            print(f"checking the token address: {address_data.address}")
+            self.fetch_url(address_data.address + r"#holders")
             try:
-                retunred_holders = self.handle_csv_download(address)
-                logging.info(f"Fetched data for {address} the data {retunred_holders}")
-                yield self.pair_data(old_data=old_data, raw_data=retunred_holders)
+                retunred_holders = self.handle_csv_download(address_data.address)
+                logging.info(
+                    f"Fetched data for {address_data.address} the data {retunred_holders}"
+                )
+                address_data.data = retunred_holders
+                yield address_data
 
             except StaleElementReferenceException:
                 print("Stale element encountered, re-locating...")
@@ -101,8 +104,8 @@ class solscan_processor(Base_scraper):
                         return [df_holders.to_dict(), address]
 
         except Exception as err:
-            logging.error(f"Error: {err}")
-            print(f"Error: {err}")
+            logging.error(f"Error occurred during CSV download for address {address}: {str(err)}", exc_info=True)
+            print(f"[ERROR] Failed to process CSV download for {address}. Error details: {str(err)}")
             # Ensure we're back on main window in case of error
 
     def wait_for_download(self, timeout=30, check_interval=1):

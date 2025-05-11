@@ -1,10 +1,12 @@
 from abc import ABC, abstractmethod
 from typing import Any, Dict
+from pydantic import BaseModel
+from abc import ABC, abstractmethod
 
 
 class Idata_validator(ABC):
     @abstractmethod
-    def validate(self, data: Dict):
+    def validate(self, data: Dict) -> BaseModel:
         pass
 
 
@@ -16,16 +18,18 @@ class Ithreader(ABC):
         pass
 
     @abstractmethod
-    def scrape(self):
-        pass
-
-    @abstractmethod
     def stop(self):
         pass
 
     @abstractmethod
     def start(self):
         pass
+    
+    @abstractmethod
+    def cleanup(self):
+        pass
+    
+
 
 
 class Iwait_threader(ABC):

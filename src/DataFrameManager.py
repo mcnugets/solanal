@@ -3,8 +3,10 @@ from typing import List, Optional, Dict
 from datetime import datetime
 import logging
 from pathlib import Path
-
+from src.data.models import Address_Data as ad
 import csv
+from src.core.logger import ScraperLogger as logger
+from itertools import zip_longest
 
 
 # [
@@ -20,11 +22,13 @@ import csv
 #     "address",
 # ]
 class DataFrameManager:
-    def __init__(self, base_file, columns: Optional[List[str]] = None):
+
+    def __init__(self, logger: logger, base_file, columns: Optional[List[str]] = None):
         self.df = pd.DataFrame()
         self.base_file = base_file
         self.columns = columns
         self.setup_logging()
+        self.logger = logger
 
     def setup_logging(self):
         logging.basicConfig(
@@ -33,13 +37,81 @@ class DataFrameManager:
             format="%(asctime)s - %(levelname)s - %(message)s",
         )
 
-    def process_data(self, data: List[str], columnname: str) -> Dict:
+    def process_data(self, data: List[str] | Dict) -> Dict:
         try:
+            if self.columns is None:
+                return data
+
             # Convert list to DataFrame row
-            row_dict = dict(zip(self.columns, data))
-            print("---------------------")
-            print(f"row_dict: {row_dict}")
-            print("---------------------")
+            data_len = len(data)
+            expected_len = len(self.columns)
+            col = self.columns[::-1]
+            data = data[::-1]
+            row_dict = {}
+            if data_len != expected_len:
+                self.logger.log_warning(
+                    f'mismatch between the data and the columns length, expected {expected_len}, got {data_len}'
+                )
+               
+                if data_len < expected_len:
+                    
+                    if data_len == expected_len - 1:
+                        
+                        check_latest_el = data[-1]
+                        second_last_el = data[-2]
+                        third_last = data[-3]
+                       
+                       
+                       
+                        if check_latest_el in second_last_el and third_last not in ["Buy","Run"]:
+                            data.pop()
+
+                        
+                        data = data[::-1]
+                        
+                        for col in col:
+                            print(data[-1])
+                            if col == "Top 10":
+                                if data[-1][-1] == '%':
+                                    row_dict[col] = data.pop()
+                                    continue
+                                row_dict[col] = ""
+                                continue
+                                        
+                            
+                            if col == "Dev holds": 
+                                if data[-1][-1] == '%':
+                                    row_dict[col] = data.pop()
+                                    continue
+                                row_dict[col] = ""
+                                continue
+                            row_dict[col] = data.pop()
+                                
+
+                    if data_len ==  expected_len - 2:
+                        data = data[::-1]
+                
+                        for col in col:
+                            if col == "Top 10":
+                                row_dict[col] = ""
+                                continue
+                            if col == "Dev holds":
+                                row_dict[col] = ""
+                                continue
+                            row_dict[col] = data.pop()
+                        self.logger.log_info(f' balls itch {row_dict}')
+                   
+
+            if not row_dict:
+                row_dict = dict(zip(col, data))
+                self.logger.log_info(f' the row dict BALLS{row_dict}')
+            # row_dict = {
+            #     col: val for col, val in zip_longest(self.columns, data, fillvalue="")
+            # }
+            # if "" in row_dict:
+            #     row_dict.pop("")
+
+            self.logger.log_info(f"the data in dataframe manager: {row_dict}")
 
             # section for adding to queue
 
@@ -50,14 +122,14 @@ class DataFrameManager:
 
             logging.info(f"row details {row_dict}")
             logging.info(f"Added row. Row details: {len(self.df)}")
-
+            columnname = self.columns[-1]
             # Save checkpoint every 100 rows
             if len(self.df) % 1 == 0:
                 self.clean_dataframe(columnname=columnname)
                 self.save_checkpoint()
-            return new_row.to_dict()
+            return row_dict
         except Exception as e:
-            logging.error(f"Error processing data: {e}")
+            self.logger.log_error(f"Error processing data: {e}")
 
     def clean_dataframe(self, columnname: str) -> None:
         try:
@@ -105,10 +177,74 @@ class DataFrameManager:
         }
 
 
-# Usage in CoinScraper
-def _process_data(self):
-    df_manager = DataFrameManager()
-    while not self.stop_event.is_set():
-        if not self.processed_queue.empty():
-            data = self.processed_queue.get()
-            df_manager.process_data(data)
+gmgn = [
+    "ticker",
+    "name",
+    "i dont know",
+    "dev sold?",
+    "address",
+    "current price",
+    "24h",
+    "snipers",
+    "bluechip",
+    "top 10",
+    "audit",
+    "Taxes",
+    "full_address",
+]
+
+gmgn_2 = [
+        "ticker",
+        "name",
+        "dev sold/bought",
+        "age",
+        "address",
+        "liquidity",
+        "total holders",
+        "Top 10",
+        "Dev holds",
+        "volume",
+        "market cap",
+        "full_address",
+    ]
+
+
+data_sample = [
+    "6p8ez...Aq4",
+    "$0.0000",
+    "--%",
+    "3/4",
+    "0%",
+    "0.4%",
+    "4/4",
+    "1%",
+    "6p8ez2tKSKhyCZpv29sxd5fwpzS6uDpW515hUybvSAq4",
+]
+data_sample_2 = [
+    "11cfd...ebp",
+    "$0.0000",
+    "--%",
+    "--",
+    "0%",
+    "Audit",
+    "11cfd6acd78d06c7c555f91a427e9d10.webp",
+]
+data_sample_3 = ['0x', '0xa', '0xa', 'Buy', '1s', 'Gq7XD...oop', '$0', '--', '$0', '$0', 'Gq7XDXZ3ZYxfXHbpbtRsL5S7EmiwpW68vn1BKrQboop']
+
+
+def main():
+    """Main function for testing DataFrameManager functionality."""
+    import pandas as pd
+    from DataFrameManager import DataFrameManager
+    
+    # Initialize DataFrameManager with test columns
+    test_columns = ["ticker", "name", "address", "liquidity", "market_cap"]
+    df_manager = DataFrameManager(columns=gmgn_2, base_file="pumpfun_data.csv", logger=logger())
+    
+    ans = df_manager.process_data(data_sample_3)
+    print(ans)
+ 
+   
+    
+if __name__ == "__main__":
+    main()

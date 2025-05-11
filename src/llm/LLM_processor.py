@@ -152,11 +152,6 @@ class llm_analyser:
     ) -> List[Dict]:
 
         try:
-            if not isinstance(conversation_h, list):
-                raise TypeError("conversation_h must be a list")
-
-            if not isinstance(user_prompt, dict):
-                raise ValueError("user_prompt must be a dictionary")
 
             if not conversation_h:
                 conversation_h.append(self.system_prompt())

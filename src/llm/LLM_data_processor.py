@@ -61,11 +61,8 @@ class llm_data_processor:
     def __init__(
         self,
         logger: logger,
-        batch_size: int,
     ) -> None:
 
-        self.batch_size = batch_size
-        self.deque = deque(maxlen=batch_size)
         self.logger = logger
         self.data_validator = token_data_validator(logger)
 
@@ -93,7 +90,7 @@ class llm_data_processor:
             main_token_data = self.setup_token_data(
                 validated_data.pumpfun_data, columns
             )
-            gmgn_data = self.setup_gmgn_data(validated_data.gmgn_data, columns)
+            gmgn_data = self.setup_gmgn_data(validated_data.gmgn_data_, columns)
             holders = self.setup_holders(validated_data.holders)
 
             divider = "-" * 50

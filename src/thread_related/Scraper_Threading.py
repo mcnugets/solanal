@@ -23,9 +23,11 @@ from pathlib import Path
 from src.utils.TextProcessor import TextProcessor as tp
 from colorama import init, Fore, Back, Style
 
-from src import Base_scraper, Pair_data, ScraperLogger as logger
+from src.scrapers.Base_scraper import Base_scraper
+from src.data.models import Pair_data
+from src.core.logger import ScraperLogger as log
 
-# logger = ScraperLogger()
+logger = log()
 
 init()
 
@@ -124,13 +126,12 @@ class Scraper_Threading:
             try:
 
                 # thing thing needs to be fixed for base cases
-                pair_data: Pair_data = self.input_queue.get(
-                    timeout=2
-                )  # Wait for data with timeout
+                # pair_data: Pair_data = self.input_queue.get(
+                #     timeout=2
+                # )  # Wait for data with timeout
+                data = self.input_queue.get(timeout=2)
                 self.is_input_queue = True
-
-                data = pair_data.raw_data
-                address = data[-1]
+                address = data["full_address"]
                 logging.info(f"DATA ADDED FROM THE PASSED QUEUE: {data}")
                 logger.log_type_data("the gotten data", self.type, data)
                 with self.shared_lock:
@@ -152,7 +153,7 @@ class Scraper_Threading:
                         if self.scraper is None:
                             logging.error("Scraper is not initialized")
                             return
-                        self.scraper._deque.append((pair_data, address))
+                        self.scraper._deque.append((data, address))
                         with self.condition:
                             self.condition.notify_all()  # Notify that deque has data
 
@@ -210,7 +211,8 @@ class Scraper_Threading:
 
                     except StopIteration:
                         # Generator exhausted
-                        break
+                        time.sleep(1)
+                        continue
 
                     except Exception as e:
                         print(f"Scraping error: {e}")
@@ -268,9 +270,17 @@ class Scraper_Threading:
                         logging.info(f"PROCESSED DATA: {pair_data}")
                         logger.log_type_data("the processed data", self.type, pair_data)
 
+                        if self.type != "solscan":
+                            data_row = self.df_manager.process_data(
+                                data=pair_data.raw_data,
+                                columnname=self.columns[0],
+                            )
+                        else:
+                            data_row = pair_data.raw_data
+                        self.output_queue.put(data_row)
                         self.output_queue.task_done()
                         self.shared_condition.notify_all()
-                        logging.info(f"when inner queue is NOT empty: {pair_data}")
+                        logging.info(f"when inner queue is NOT empty: {data_row}")
                         logging.info(
                             f"the output queue size: {self.output_queue.qsize()}"
                         )
@@ -280,12 +290,6 @@ class Scraper_Threading:
                         self.shared_state["current turn"] = self.process_turn[
                             idx % len(self.process_turn)
                         ]
-                        if self.df_manager:
-                            data_row = self.df_manager.process_data(
-                                data=pair_data.raw_data,
-                                columnname=self.columns[0],
-                            )
-                            self.output_queue.put(data_row)
 
             except Exception as e:
                 msg = f"The error: {e}"

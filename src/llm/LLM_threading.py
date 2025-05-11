@@ -2,9 +2,9 @@ from collections import deque
 from threading import Thread, Event
 from queue import Queue
 from threading import Lock, Condition
-from LLM_processor import llm_analyser
 from src import Parcel
 from src import ScraperLogger as logger
+from src.llm.LLM_processor import llm_analyser
 
 
 class llm_threader:
@@ -24,7 +24,7 @@ class llm_threader:
 
         self.logger = logger
 
-    def start_workers(self):
+    def start_all(self):
 
         threads = [Thread(target=self.fetch_data), Thread(target=self.process_llm)]
         for thread in threads:
@@ -39,8 +39,8 @@ class llm_threader:
                             self.condition.wait()
 
                     data: Parcel = self.input_queue.get()
-                    data_dict = data.model_dump()
-
+                    # data_dict = data.model_dump()
+                    data_dict = data.data_combined
                     self.data_buffer.append(data_dict)
                     self.input_queue.task_done()
                     with self.condition:

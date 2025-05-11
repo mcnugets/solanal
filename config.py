@@ -2,13 +2,24 @@ from selenium.webdriver.common.by import By
 from queue import Queue
 from src import queue_manager, Pair_data
 
+GLOBAL_CONFIG = {
+    # "driver_path": "/usr/bin/chromedriver",
+    "data_sources": ["pumpfun", "gmgn_2", "gmgn", "holders"],
+    "cleaning_patterns": {
+        r"\n+": "#",  # Replace newlines with hash
+        r"#+": "#",  # Normalize multiple hashes
+        r"^\#|\#$": "",  # Remove leading/trailing hashes
+    },
+}
+
+
 queue_m = queue_manager()
 
-queue_m.add_queue(["gmgn", "gmgn2", "solscan"])
+queue_m.add_queue(GLOBAL_CONFIG["data_sources"])
 queue_m.add_queue(["compiled", "final"])  # Add new queue for compiled data
 
-driver_path = r"C:\Users\sulta\AppData\Local\Programs\Python\Python310\lib\site-packages\chromedriver_autoinstaller\133\chromedriver.exe"
-configs = {
+# incorporate DATA_SOURCES into configs but later
+SCRAPER_CONFIGS = {
     "pumpfun": {
         "type": "pumpfun",
         "url": "https://pump.fun/advanced",
@@ -18,29 +29,40 @@ configs = {
             By.XPATH,
             "/html/body/div[1]/div/div/main/div[2]/div[2]/div[1]/div/div[1]/div[3]/div/div/div/div/div/div[1]/div/div",
         ),
-        "driver_path": driver_path,
+        # "driver_path": GLOBAL_CONFIG["driver_path"],
         "div_locator": (
             By.XPATH,
-            " /html/body/div[1]/main/div[1]/main/div/div[3]/div[2]/div/div/table/tbody/tr[1]/td[1]",
+            "/html/body/div[1]/main/div[1]/main/div/div[3]/div[2]/div/div/table/tbody/tr[1]/td[1]",
         ),
     },
     "gmgn_2": {
-        "type": "pumpfun",
+        "type": "gmgn_2",
         "url": "https://gmgn.ai/new-pair/tCkVIIwp?chain=sol",
-        "row_locator": (By.CLASS_NAME, "g-table-row"),
+        "row_locator": (By.TAG_NAME, "div"),
+        # /html/body/div[1]/div[2]/div[1]/main/div/div/div[2]/div[1]/div/div[1]/div[2]/div/div/div/div/div/div[1]/div
+        # <div>
+        # /html/body/div[1]/div[2]/div[1]/main/div/div/div[2]/div[1]/div/div[1]/div[2]/div/div/div/div/div/div[2]
+        # //*[@id="tabs-:r1ke:--tabpanel-0"]/div/div[1]/div[2]/div/div/div/div/div/div[1]
         "popup_locator": (By.XPATH, "/html/body/div[2]/div/div[3]"),
         "main_locator": (
             By.XPATH,
-            "/html/body/div[1]/div/div/main/div[2]/div/div[2]/div[1]/div/div[1]/div[3]/div/div/div/div/div/div[1]/div/div",
+            "/html/body/div[1]/div[2]/div[1]/main/div/div/div[2]/div[1]/div/div[1]/div[2]/div/div/div/div/div",
         ),
-        "driver_path": driver_path,
+        # "driver_path": GLOBAL_CONFIG["driver_path"],
+        "extra_locator": (
+            By.XPATH,
+            "/html/body/div[4]/div/div[2]/div",
+        ),
     },
     "gmgn": {
         "type": "gmgn",
         "url": "https://gmgn.ai/sol/token/",
-        "row_locator": (By.CLASS_NAME, "css-1jy8g2v"),
+        "row_locator": (
+            By.XPATH,
+            "/html/body/div[1]/div[2]/div[1]/main/div/div[2]/div[1]",
+        ),
         "popup_locator": (By.XPATH, "/html/body/div[2]/div/div[3]"),
-        "driver_path": driver_path,
+        # "driver_path": GLOBAL_CONFIG["driver_path"],
         "main_locator": (By.CLASS_NAME, "css-1jy8g2v"),
         "csv_path": "pumpfun_data.csv",
     },
@@ -49,99 +71,260 @@ configs = {
         "url": "https://solscan.io/token/",
         "row_locator": (By.XPATH, "/html/body/div[3]/div[3]/button[2]"),
         "popup_locator": (),
-        "driver_path": driver_path,
+        # "driver_path": GLOBAL_CONFIG["driver_path"],
         "main_locator": (
             By.XPATH,
-            "/html/body/div/div[1]/div[3]/div[1]/div[2]/div[2]/div[2]/div[2]/div/div[5]/div/div/div[1]/div/button",
+            "/html/body/div/div[1]/div[3]/div[1]/div[2]/div[2]/div[2]/div[2]/div/div[5]/div/div/div[1]/div/div[2]/button[2]",
+            
         ),
         "csv_path": "pumpfun_data.csv",
         "download_path": "holders",
     },
 }
+# row_locator = f'xpath=/html/body/div[1]/div[2]/div[1]/main/div[2]/div/div[2]/div[1]'
+#         # 7. Find the element on the page that contains the text we want.
+#         # We use page.locator() with a CSS selector.
+#         # For example.com, the main heading is inside an <h1> tag.
+#         # The main paragraph is inside a <p> tag.
 
-#  URL = "https://solscan.io/token/"
-#     main_locator = (
-#         By.XPATH,
-#         "/html/body/div/div[1]/div[3]/div[1]/div[2]/div[2]/div[2]/div/div[5]/div/div/div[1]/div/button",
-#     )
-#     row_locator = (By.XPATH, "/html/body/div[3]/div[3]/button[2]")
-#     ss = solscan_processor(
-#         main_locator=main_locator,
-#         popup_locator=(),
-#         row_locator=row_locator,
-#         url=URL,
-#         csv_path="../pumpfun_data.csv",
-#         download_path="../holders",
-#         driver_path=r"C:\Users\sulta\AppData\Local\Programs\Python\Python310\lib\site-packages\chromedriver_autoinstaller\131\chromedriver.exe",
-#     )
-
-
-# pumpfun_config = {
-#     "type": "pumpfun",
-#     "url": "https://pump.fun/advanced",
-#     "row_locator": (By.TAG_NAME, "tr"),
-#     "popup_locator": (By.XPATH, "/html/body/div[4]/div[5]/button"),
-#     "main_locator": (  # change main locator to pumfun
-#         By.XPATH,
-#         "/html/body/div[1]/div/div/main/div[2]/div[2]/div[1]/div/div[1]/div[3]/div/div/div/div/div/div[1]/div/div",
-#     ),
-#     "driver_path": driver_path,
-#     "div_locator": (
-#         By.XPATH,
-#         " /html/body/div[1]/main/div[1]/main/div/div[3]/div[2]/div/div/table/tbody/tr[1]/td[1]",
-#     ),
-# }
-# gmgn_config_2 = {
-#     "type": "pumpfun",
-#     "url": "https://gmgn.ai/new-pair/tCkVIIwp?chain=sol",
-#     "row_locator": (By.CLASS_NAME, "g-table-row"),
-#     "popup_locator": (By.XPATH, "/html/body/div[3]/div/div[3]"),
-#     "main_locator": (
-#         By.XPATH,
-#         "/html/body/div[1]/div/div/main/div[2]/div[2]/div[1]/div/div[1]/div[3]/div/div/div/div/div/div[1]/div/div",
-#     ),
-#     "driver_path": driver_path,
-# }
-
-# gmgn_config = {
-#     "type": "gmgn",
-#     "url": "https://gmgn.ai/sol/token/",
-#     "row_locator": (By.CLASS_NAME, "css-1jy8g2v"),
-#     "popup_locator": (By.XPATH, "/html/body/div[3]/div/div[3]"),
-#     "driver_path": driver_path,
-#     "main_locator": (By.CLASS_NAME, "css-1jy8g2v"),
-#     "csv_path": "pumpfun_data.csv",
-# }
-
-
-CLEANING_PATTERNS = {
-    r"\n+": "#",  # Replace newlines with hash
-    r"#+": "#",  # Normalize multiple hashes
-    r"^\#|\#$": "",  # Remove leading/trailing hashes
+#         # Find the locator for the <h1> element
+#         popup_xpath = "/html/body/div[2]/div[1]/div[3]"
+#         # css-1r20knq
+#         page.wait_for_selector(f'xpath={popup_xpath}')
+#         page.locator(f'xpath={popup_xpath}').click()
+#         table_xpath = f'xpath=/html/body/div[1]/div[2]/div[1]/main/div[2]/div/div/div[2]/div[1]/div/div[1]/div[2]/div/div'
+        
+SCRAPER_CONFIGS_2 = {
+    "pumpfun": {
+        "type": "pumpfun",
+        "url": "https://pump.fun/advanced",
+        "row_locator": "tr",
+        "popup_locator": "/html/body/div[4]/div[5]/button",
+        "main_locator": "/html/body/div[1]/div/div/main/div[2]/div[2]/div[1]/div/div[1]/div[3]/div/div/div/div/div/div[1]/div/div",
+        # "driver_path": GLOBAL_CONFIG["driver_path"],
+        "div_locator": "/html/body/div[1]/main/div[1]/main/div/div[3]/div[2]/div/div/table/tbody/tr[1]/td[1]",
+    },
+    "gmgn_2": {
+        "type": "gmgn_2",
+        "url": "https://gmgn.ai/new-pair/tCkVIIwp?chain=sol&tab=home",
+        "row_locator": "div",
+        "popup_locator": "/html/body/div[2]/div[1]/div[3]",
+        "main_locator": "/html/body/div[1]/div[2]/div[1]/main/div[2]/div/div/div[2]/div[1]/div/div[1]/div[2]/div/div/div/div/div",
+        # "driver_path": GLOBAL_CONFIG["driver_path"],
+        "extra_locator": "/html/body/div[4]/div/div[2]/div",
+    },
+    "gmgn": {
+        "type": "gmgn",
+        "url": "https://gmgn.ai/sol/token/",
+        "row_locator": "/html/body/div[1]/div[2]/div[1]/main/div[2]/div/div[2]/div[1]",
+        "popup_locator": "/html/body/div[2]/div[1]/div[3]",
+        # "driver_path": GLOBAL_CONFIG["driver_path"],
+        "main_locator": "css-1jy8g2v",
+        "csv_path": "pumpfun_data.csv",
+    },
+    "solscan": {
+        "type": "solscan",
+        "url": "https://solscan.io/token/",
+        "row_locator": "/html/body/div[3]/div[3]/button[2]",
+        "popup_locator": "",
+        # "driver_path": GLOBAL_CONFIG["driver_path"],
+        "main_locator": "/html/body/div/div[1]/div[3]/div[1]/div[2]/div[2]/div[2]/div[2]/div/div[5]/div/div/div[1]/div/div[2]/button[2]",
+        "csv_path": "pumpfun_data.csv",
+        "download_path": "holders",
+    },
 }
-patterns = {
-    "patterns_pumpfun": {
-        "MC": "",  # Removes "MC"
-        "Vol": "",  # Removes "Vol"
-        "T10": "",  # Removes "T10"
-        "DH": "",
+
+
+
+PATTERNS = {
+    "pumpfun": [
+        "MC",
+        "Vol",
+        "T10",
+        "DH",
+    ],
+    "gmgn": [
+        "24h",
+        "Snipers",
+        "BlueChip",
+        "Name",
+        "CA",
+        "Top 10",
+        "Audit",
+        ">",
+        "Safe",
+        "Share",
+        "Taxes",
+        "Dex",
+    ],
+    "gmgn_2": [
+        "Liq",
+        "Vol",
+        "?",
+        "V",
+        "MC",
+    ],
+}
+
+COLUMN_HEADERS = {
+    "pumpfun": [
+        "coin name",
+        "fullname",
+        "bd",
+        "mc",
+        "vol",
+        "t10",
+        "holders",
+        "age",
+        "dh",
+        "snipers",
+        "address",
+    ],
+    "gmgn": [
+        "ticker",
+        "name",
+        "i dont know",
+        "dev sold?",
+        "address",
+        "current price",
+        "24h",
+        "snipers",
+        "bluechip",
+        "top 10",
+        "audit",
+        "Taxes",
+        "full_address",
+    ],
+    #   "gmgn_2": [
+    #     "ticker",
+    #     "name",
+    #     "dev sold/bought",
+    #     "age",
+    #     "address",
+    #     "liquidity",
+    #     "total holders",
+    #     "volume",
+    #     "market cap",
+    #     "full_address",
+    # ],
+    "gmgn_2": [
+        "ticker",
+        "name",
+        "dev sold/bought",
+        "age",
+        "address",
+        "liquidity",
+        "total holders",
+        "Top 10",
+        "Dev holds",
+        "volume",
+        "market cap",
+        "full_address",
+    ],
+}
+
+# -------------SETUP FOR OLD LOGIC
+SCRAPERS = [
+    {
+        "name": "gmgn_2",
+        "config": SCRAPER_CONFIGS["gmgn_2"],
+        "columns": COLUMN_HEADERS["gmgn_2"],
+        "patterns": PATTERNS["gmgn_2"],
+        "cleaning_patterns": GLOBAL_CONFIG["cleaning_patterns"],
+        "base_file": "pumpfun_data.csv",
+        "input_queue": None,
+        "output_queue": queue_m.get_queue(GLOBAL_CONFIG["data_sources"][0])[
+            "output_queue"
+        ],
     },
-    "patterns_gmgn": {
-        "24h": "",  # Removes "MC"
-        "Snipers": "",  # Removes "Vol"
-        "BlueChip": "",  # Removes "T10"
-        "Top 10": "",
-        "Audit": "",
-        ">": "",
-        "Safe": "",
-        "Share": "",
-        "Taxes": "",
-        "Dex": "",
+    {
+        "name": "gmgn",
+        "config": SCRAPER_CONFIGS["gmgn"],
+        "columns": COLUMN_HEADERS["gmgn"],
+        "patterns": PATTERNS["gmgn"],
+        "cleaning_patterns": GLOBAL_CONFIG["cleaning_patterns"],
+        "base_file": "gmgn_data.csv",
+        "input_queue": queue_m.get_queue(GLOBAL_CONFIG["data_sources"][0])[
+            "output_queue"
+        ],
+        "output_queue": queue_m.get_queue(GLOBAL_CONFIG["data_sources"][1])[
+            "output_queue"
+        ],
     },
-    "patterns_gmgn_2": {
-        "Liq": "",  # Removes "MC"
-        "Vol": "",  # Removes "Vol"
-        r"\bV\b": "",
-        r"\bMC\b": "",
+    {
+        "name": "solscan",
+        "config": SCRAPER_CONFIGS["solscan"],
+        "columns": "",
+        "patterns": "",
+        "cleaning_patterns": "",
+        "base_file": "",
+        "input_queue": queue_m.get_queue(GLOBAL_CONFIG["data_sources"][0])[
+            "output_queue"
+        ],
+        "output_queue": queue_m.get_queue(GLOBAL_CONFIG["data_sources"][2])[
+            "output_queue"
+        ],
     },
+]
+
+
+# -------------FOR NEW CODE--------
+# CENTRALISED APPROACH
+
+THREADER_TYPE = ["scrapers", "llm"]
+# CONFIG = {"global": GLOBAL_CONFIG, "scrapers": {}, "llm": {}}
+
+CONFIG = {
+    # Global settings (shared across all scrapers)
+    "global": GLOBAL_CONFIG,
+    # Scraper-specific configurations
+    "scrapers": {
+        "pumpfun": {
+            "scraper": True,
+            "wait": False,
+            "save": True,
+            "process": True,
+            # Processor requirements (passed to pumpfun_processor)
+            "scraper_configs": SCRAPER_CONFIGS_2["pumpfun"],
+            # Data processing rules
+            "columns": COLUMN_HEADERS["pumpfun"],
+            "patterns": PATTERNS["pumpfun"],
+            "base_file": "pumpfun_data.csv",
+            "input_queue": None,
+        },
+        "gmgn_2": {
+            "scraper": True,
+            "wait": False,
+            "save": True,
+            "process": True,
+            "scraper_configs": SCRAPER_CONFIGS_2["gmgn_2"],
+            "columns": COLUMN_HEADERS["gmgn_2"],
+            "patterns": PATTERNS["gmgn_2"],
+            "base_file": "pumpfun_data.csv",
+            "input_queue": None,
+        },
+        "gmgn": {
+            "scraper": True,
+            "wait": True,
+            "save": True,
+            "process": True,
+            "scraper_configs": SCRAPER_CONFIGS_2["gmgn"],
+            "columns": COLUMN_HEADERS["gmgn"],
+            "patterns": PATTERNS["gmgn"],
+            "base_file": "gmgn_data.csv",
+            "input_queue": "gmgn_2",  # Input queue changes depending on is predecessing operation type
+        },
+        "solscan": {
+            "scraper": True,
+            "wait": True,
+            "save": False,
+            "process": True,
+            "scraper_configs": SCRAPER_CONFIGS_2["solscan"],
+            "columns": [],
+            "patterns": {},
+            "base_file": "",
+            "input_queue": "gmgn",
+        },
+    },
+    "llm": {},
 }

@@ -5,6 +5,8 @@ from typing import Optional
 import sys
 from queue import Queue
 from threading import Lock
+from rich.logging import RichHandler
+from rich.console import Console
 
 
 class ScraperLogger:
@@ -26,12 +28,30 @@ class ScraperLogger:
         self.logs_dir.mkdir(exist_ok=True)
 
         self.queue_logs = {}  # Track queue sizes
-        self._setup_logger()
+        self.setup_logger("default")
+        self.name = None
         self._initialized = True
 
-    def _setup_logger(self):
+    @property
+    def name(self):
+        """Get the current logger name"""
+        return self._name
+
+    @name.setter
+    def name(self, value):
+        """Set the logger name and update the logger instance"""
+        self._name = value
+
+    def log_warning(self, message: str):
+        """Log a warning level message"""
+        self.logger.warning(f"{self.name} - {message}")
+
+    def _setup_config():
+        logging.basicConfig
+
+    def setup_logger(self, name):
         """Configure the logger with file and console handlers"""
-        logger = logging.getLogger("scraper")
+        logger = logging.getLogger(name)
         logger.setLevel(logging.DEBUG)
 
         # Prevent duplicate handlers
@@ -42,6 +62,7 @@ class ScraperLogger:
         log_file = (
             self.logs_dir / f"scraper_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
         )
+
         file_handler = logging.FileHandler(log_file)
         file_handler.setLevel(logging.DEBUG)
 
@@ -61,6 +82,7 @@ class ScraperLogger:
         # Add the handlers to the logger
         logger.addHandler(file_handler)
         logger.addHandler(console_handler)
+        logger.addHandler(RichHandler(rich_tracebacks=True))
 
         self.logger = logger
 
@@ -68,17 +90,21 @@ class ScraperLogger:
         """Track and log queue sizes"""
         size = queue.qsize()
         self.queue_logs[queue_name] = size
-        self.logger.debug(f"Queue '{queue_name}' size: {size}")
+        self.logger.debug(f"{self.name} - Queue '{queue_name}' size: {size}")
+
+    def log_info(self, message: str):
+        """Log an info level message"""
+        self.logger.info(f"{self.name} - {message}")
 
     def log_type_data(self, message: str, data_type: str, data):
         """Log data of a specific type"""
-        self.logger.debug(f"{message} - {data_type}: {data}")
+        self.logger.debug(f"{self.name} - {message} - {data_type}: {data}")
 
     def log_scraper_event(
         self, scraper_name: str, event: str, data: Optional[dict] = None
     ):
         """Log scraper-specific events"""
-        message = f"Scraper '{scraper_name}' - {event}"
+        message = f"{self.name} - Scraper '{scraper_name}' - {event}"
         if data:
             message += f": {data}"
         self.logger.info(message)
@@ -86,17 +112,19 @@ class ScraperLogger:
     def log_error(self, error_msg: str, exc_info: Optional[Exception] = None):
         """Log errors with optional exception info"""
         if exc_info:
-            self.logger.error(error_msg, exc_info=exc_info)
+            self.logger.error(f"{self.name} - {error_msg}", exc_info=exc_info)
         else:
-            self.logger.error(error_msg)
+            self.logger.error(f"{self.name} - {error_msg}")
 
     def log_compilation(self, address: str, sources: set):
         """Log compilation events"""
-        self.logger.info(f"Compiling data for {address} from sources: {sources}")
+        self.logger.info(
+            f"{self.name} - Compiling data for {address} from sources: {sources}"
+        )
 
     def log_sync_event(self, message: str):
         """Log synchronization events"""
-        self.logger.debug(f"Sync: {message}")
+        self.logger.debug(f"{self.name} - Sync: {message}")
 
     def get_queue_stats(self) -> dict:
         """Get current queue statistics"""

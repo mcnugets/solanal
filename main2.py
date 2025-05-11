@@ -7,13 +7,14 @@ from threading import Event
 import signal
 import time
 from selenium.webdriver.support import expected_conditions as EC
-from config import CLEANING_PATTERNS, configs, patterns, queue_m
+from config import queue_m
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 import time
-
+from src.thread_related.factories.threader_factory import threader_factory
+from config import CONFIG, SCRAPERS, SCRAPER_CONFIGS, GLOBAL_CONFIG
 from src import (
     DataCompiler,
     Scraper_Manager,
@@ -21,7 +22,12 @@ from src import (
     gmgn_processor,
     solscan_processor,
     pumpfun_processor,
+    llm_threader,
+    llm_analyser,
+    llm_data_processor,
+    validate_sources,
 )
+from src.DataFrameManager import DataFrameManager
 
 logger = ScraperLogger()
 
@@ -41,56 +47,22 @@ logger = ScraperLogger()
 #  TODO: create pydantic models for validation
 
 
-def signal_handler(sig, frame):
-    global stop_event
-    print("\nShutting down gracefully...")
-    stop_event.set()
+# def signal_handler(sig, frame):
+#     global stop_event
+#     print("\nShutting down gracefully...")
+#     stop_event.set()
 
 
-signal.signal(signal.SIGINT, signal_handler)
-stop_event = Event()
-
-gmgn_2_config = configs["gmgn_2"]
-gmgn_config = configs["gmgn"]
-solscan_config = configs["solscan"]
+# signal.signal(signal.SIGINT, signal_handler)
+# stop_event = Event()
 
 
 def extract_dynamic_table_data_2(columns: List[str] = None):
     global stop_event
-    shared_state_ = {"current turn": gmgn_2_config["type"]}
-
-    scrapers = [
-        {
-            "config": gmgn_2_config,
-            "columns": columns[0],
-            "patterns": patterns["patterns_gmgn_2"],
-            "cleaning_patterns": CLEANING_PATTERNS,
-            "base_file": "pumpfun_data.csv",
-            "input_queue": None,
-            "output_queue": queue_m.get_queue("gmgn2")["output_queue"],
-        },
-        # {
-        #     "config": gmgn_config,
-        #     "columns": columns[1],
-        #     "patterns": patterns["patterns_gmgn"],
-        #     "cleaning_patterns": CLEANING_PATTERNS,
-        #     "base_file": "gmgn_data.csv",
-        #     "input_queue": queue_m.get_queue("gmgn2")["output_queue"],
-        #     "output_queue": queue_m.get_queue("gmgn")["output_queue"],
-        # },
-        {
-            "config": solscan_config,
-            "columns": "",
-            "patterns": "",
-            "cleaning_patterns": "",
-            "base_file": "",
-            "input_queue": queue_m.get_queue("gmgn2")["output_queue"],
-            "output_queue": queue_m.get_queue("solscan")["output_queue"],
-        },
-    ]
+    shared_state_ = {"current turn": SCRAPER_CONFIGS["gmgn_2"]["type"]}
 
     manager_ = Scraper_Manager(logger=logger, shared_state=shared_state_)
-    for scraper in scrapers:
+    for scraper in SCRAPER_CONFIGS:
         manager_.add_scraper(
             config=scraper["config"],
             columns=scraper["columns"],
@@ -113,15 +85,40 @@ def extract_dynamic_table_data_2(columns: List[str] = None):
         print("All scrapers stopped.")
     compiler = DataCompiler(
         input_queues={
-            "gmgn2": queue_m.get_queue("gmgn2")["output_queue"],
-            "gmgn": queue_m.get_queue("gmgn")["output_queue"],
-            "solscan": queue_m.get_queue("solscan")["output_queue"],
+            GLOBAL_CONFIG["data_sources"][0]: queue_m.get_queue(
+                GLOBAL_CONFIG["data_sources"][0]
+            )["output_queue"],
+            GLOBAL_CONFIG["data_sources"][1]: queue_m.get_queue(
+                GLOBAL_CONFIG["data_sources"][1]
+            )["output_queue"],
+            GLOBAL_CONFIG["data_sources"][2]: queue_m.get_queue(
+                GLOBAL_CONFIG["data_sources"][2]
+            )["output_queue"],
         },
         output_queue=queue_m.get_queue("compiled")["output_queue"],
         logger=logger,
+        data_sources=validate_sources(
+            pumpfun=GLOBAL_CONFIG["data_sources"][0],
+            holders=GLOBAL_CONFIG["data_sources"][2],
+        ),
     )
-
     compiler.start()
+
+    #
+    #
+    # model_name = "deepseek-r1:7b"
+    # data_setup_llm = llm_data_processor(logger=logger)
+    # llm_data_analysis_input = llm_analyser(
+    #     model=model_name,
+    #     logger=logger,
+    #     llm_data_processor=data_setup_llm,
+    # )
+    # llm_dataflow_manager = llm_threader(
+    #     input_queue=queue_m.get_queue("compiled")["output_queue"],
+    #     logger=logger,
+    #     llm_anal=llm_data_analysis_input,
+    # )
+    # llm_dataflow_manager.start_all()
 
     # Monitor all scrapers
     # try:
@@ -153,23 +150,59 @@ def extract_dynamic_table_data_2(columns: List[str] = None):
     #     print("All scrapers stopped.")
 
 
-if __name__ == "__main__":
-    URL = "https://pump.fun/advanced"  # Replace with your URL
-    TABLE_XPATH = "/html/body/div[1]/main/div[1]/main/div/div[3]/div[2]/div/div/table"  # Replace with your table's XPath
-    headers = [
-        "coin name",
-        "fullname",
-        "bd",
-        "mc",
-        "vol",
-        "t10",
-        "holders",
-        "age",
-        "dh",
-        "snipers",
-        "address",
-    ]
-    headers_gmgn_1 = [
+def orchestrator(scrape_manager: Scraper_Manager):
+
+    gmgn_2_output_queue = queue_m.get_queue("gmgn_2")["output_queue"]
+    gmgn_output_queue = queue_m.get_queue("gmgn")["output_queue"]
+    solscan_output_queue = queue_m.get_queue("holders")["output_queue"]
+
+    fac = threader_factory()
+    gmgn_two = fac.create_threader(
+        threader_type="scrapers",
+        scraper_type="gmgn_2",
+        configs=CONFIG,
+        output_queue=gmgn_2_output_queue,
+    )
+
+    # gmgn_one = fac.create_threader(
+    #     threader_type="scrapers",
+    #     scraper_type="gmgn",
+    #     configs=CONFIG,
+    #     output_queue=gmgn_output_queue,
+    #     input_queue=gmgn_2_output_queue,
+    # )
+
+    # solscan = fac.create_threader(
+    #     threader_type="scrapers",
+    #     scraper_type="solscan",
+    #     configs=CONFIG,
+    #     input_queue=gmgn_2_output_queue,
+    #     output_queue=solscan_output_queue,
+    # )
+    scrape_manager.add_scraper_v2(gmgn_two)
+    # scrape_manager.add_scraper_v2(gmgn_one)
+    # scrape_manager.add_scraper_v2(solscan)
+    scrape_manager.start()
+
+
+
+gmgn = [
+    "ticker",
+    "name",
+    "i dont know",
+    "dev sold?",
+    "address",
+    "current price",
+    "24h",
+    "snipers",
+    "bluechip",
+    "top 10",
+    "audit",
+    "Taxes",
+    "full_address",
+]
+
+gmgn_2 = [
         "ticker",
         "name",
         "dev sold/bought",
@@ -177,39 +210,116 @@ if __name__ == "__main__":
         "address",
         "liquidity",
         "total holders",
+        "Top 10",
+        "Dev holds",
         "volume",
         "market cap",
         "full_address",
     ]
-    # TRUMP    = name
-    # THE ALMI
-    # 0%
-    # Run     = dev sold
-    # Fkr7i...8tU = address
-    # $0.0₅83176 = current price
-    # 0%       = 24h
-    # 0/1      = snipers
-    # 0%       = bluechip
-    # 0%      = top 10
-    # Safe    = audit
-    # 4/4
-    headers_gmgn = [
-        "ticker",
-        "name",
-        "i dont know",
-        "dev sold?",
-        "address",
-        "current price",
-        "24h",
-        "snipers",
-        "bluechip",
-        "top 10",
-        "audit",
-        "Taxes",
-        "full_address",
-    ]
 
-    extract_dynamic_table_data_2(columns=[headers_gmgn_1, headers_gmgn])
+
+data_sample = [
+    "6p8ez...Aq4",
+    "$0.0000",
+    "--%",
+    "3/4",
+    "0%",
+    "0.4%",
+    "4/4",
+    "1%",
+    "6p8ez2tKSKhyCZpv29sxd5fwpzS6uDpW515hUybvSAq4",
+]
+data_sample_2 = [
+    "11cfd...ebp",
+    "$0.0000",
+    "--%",
+    "--",
+    "0%",
+    "Audit",
+    "11cfd6acd78d06c7c555f91a427e9d10.webp",
+]
+data_sample_3 = ['0x', '0xa', '0xa', 'Buy', '1s', 'Gq7XD...oop', '$0', '--', '$0', '$0', 'Gq7XDXZ3ZYxfXHbpbtRsL5S7EmiwpW68vn1BKrQboop']
+data_sample_4 = ['0xa', '0xa', 'Buy', '1s', 'Gq7XD...oop', '$0', '--', '$0', '$0', 'Gq7XDXZ3ZYxfXHbpbtRsL5S7EmiwpW68vn1BKrQboop']
+data_sample_5 = ['0xa', '0xa', 'Buy', '1s', 'Gq7XD...oop', '$0', '--','5%', '$0', '$0', 'Gq7XDXZ3ZYxfXHbpbtRsL5S7EmiwpW68vn1BKrQboop']
+data_sampel_6 = ['0x','0xa', '0xa', 'Buy', '1s', 'Gq7XD...oop', '$0', '--','5%', '$0', '$0', 'Gq7XDXZ3ZYxfXHbpbtRsL5S7EmiwpW68vn1BKrQboop']
+
+data_sample_7 = ['GTAVI', 'Grand Trump Auto VI', '1%', 'HODL', 'Bmpj9...XAS', '$0.0₅43362', '-2.23%', '--', '0%', '8.3%', '4/4', '1%', 'Bmpj9ghk4ZFVYDVp46R243guddHtDQYWXx96FHW9rXAS']
+
+data_sample_8 = ['ETH', 'dont buy this shit', '25%', 'HODL', 'bPeYd...ump', '$0.0₅61682', '+38.02%', '--', '0%', '6.2%', '4/4', '1%', 'bPeYdx2xJthrk8E3nPH5aqHmY43rF9xaocRhFRtpump']
+
+data_sample_9 = ['TiedIguana', 'TiedIguana', '3%', 'Run', '8uJeC...ump', '$0.0₅44040', '+1.59%', '4/8', '0%', '0.5%', '4/4', '1%', '8uJeCFBzGD4qxAP46giPqKJnL9R95jQmJTLRhnkXpump'] 
+
+def test_case():
+    """Main function for testing DataFrameManager functionality."""
+    import pandas as pd
+    
+    
+    # Initialize DataFrameManager with test columns
+    test_columns = ["ticker", "name", "address", "liquidity", "market_cap"]
+
+    df_manager = DataFrameManager(columns=gmgn_2, base_file="pumpfun_data.csv", logger=logger)
+    
+    ans = df_manager.process_data(data_sample_3)
+    print(ans)#
+    print("---------------------")
+    ans_2 = df_manager.process_data(data_sample_4)
+    print(ans_2)
+    print("=====================")
+    ans_3 = df_manager.process_data(data_sample_5)
+    print(ans_3)
+
+
+    df_manager = DataFrameManager(columns=gmgn, base_file="gmgn_data.csv", logger=logger)
+    ans5 = df_manager.process_data(data_sample_7)
+    print(ans5)
+
+
+    print(df_manager.process_data(data_sample_8))
+
+
+    print(df_manager.process_data(data_sample_9))
+
+
+def test_case_pumpfun():
+    from src.scrapers.playwright.pumpfun_scraper import pumpfun_scraper
+    from src.core.logger import ScraperLogger as log
+    table_xpath = '/html/body/div[1]/div[2]/div[1]/main/div[2]/div/div/div[2]/div[1]/div/div[1]/div[2]/div/div/div/div/div'
+
+    logger = log()  # Initialize logger if not already available
+    pumpfun_scraper_instance = pumpfun_scraper(
+        url="https://gmgn.ai/new-pair/tCkVIIwp?chain=sol&tab=home",
+        logger=logger,
+        main_locator=table_xpath,
+        row_locator="div",
+        popup_locator="/html/body/div[2]/div[1]/div[3]"
+    )
+
+    try:
+        result =  pumpfun_scraper_instance.start_scrape()
+        boom = next(result)
+        print(boom)
+    except StopIteration:
+        print("No more data to scrape")
+
+
+ 
+   
+    
+
+
+
+if __name__ == "__main__":
+    # URL = "https://pump.fun/advanced"  # Replace with your URL
+    # TABLE_XPATH = "/html/body/div[1]/main/div[1]/main/div/div[3]/div[2]/div/div/table"  # Replace with your table's XPath
+
+    # extract_dynamic_table_data_2(
+    #     columns=[COLUMN_HEADERS["gmgn_2"], COLUMN_HEADERS["gmgn"]]
+    # )
+ 
+        
+    
+    manager_ = Scraper_Manager(logger=logger)
+    orchestrator(manager_)
 
 # from selenium import webdriver
 # from selenium.webdriver.common.by import By

@@ -1,10 +1,38 @@
 from queue import Queue
 from threading import Thread, Event, Lock
-from typing import Dict, List
+from typing import Dict, List, Set, ClassVar
 import logging
 import time
-from ..data.models import Pair_data, Parcel
-from ..core.logger import ScraperLogger as log
+from src.core.logger import ScraperLogger as log
+from src.data.llm_model import valid_data
+from src.data.models import Pair_data, Parcel
+from pydantic import BaseModel, field_validator
+
+
+# maybe later??
+class validate_sources(BaseModel):
+    pumpfun: str | None = None
+    gmgn: str | None = None
+    holders: str | None = None
+
+    _allowed_sources: ClassVar[Set[str]] = {"pumpfun", "gmgn", "holders"}
+
+    # @classmethod
+    # def required_sources(cls) -> Set[str]:
+    #     return cls.allowed_sources
+
+    @field_validator("pumpfun", "gmgn", "holders", mode="after")
+    @classmethod
+    def check_sources(cls, v) -> str:
+
+        if not isinstance(v, str):
+            raise TypeError("Sources must be a string")
+        if v not in cls._allowed_sources:
+            raise ValueError(f"Invalid source: {v}")
+        return v
+
+    class Config:
+        arbitrary_types_allowed = True
 
 
 class DataCompiler:
@@ -14,11 +42,15 @@ class DataCompiler:
         input_queues: Dict[str, Queue],
         output_queue: Queue,
         logger: log,
-        required_sources: List[str] = ["gmgn2", "solscan"],
+        data_sources: validate_sources,
     ):
+
         self.input_queues = input_queues
         self.output_queue = output_queue
-        self.required_sources = required_sources
+        self.required_sources = list(
+            data_sources.model_dump(exclude_none=True).values()
+        )
+
         self.stop_event = Event()
         self.data_lock = Lock()
         self.compiled_data = {}
@@ -119,11 +151,7 @@ class DataCompiler:
 
     def _combine_data(self, sources: Dict[str, Pair_data]) -> Parcel:
         """Combine data from different sources into a single Pair_data object"""
-        combined = {
-            "gmgn2_data": sources["gmgn2"].raw_data,
-            # "gmgn_data": sources["gmgn"].raw_data,
-            "solscan_data": sources["solscan"].raw_data,
-        }
+        combined = {keys: sources[keys].raw_data for keys in self.required_sources}
         return Parcel(data_combined=combined)
 
     def _extract_address(self, data: str | List[str]) -> str:

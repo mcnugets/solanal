@@ -7,6 +7,18 @@ class Pair_data(BaseModel):
     old_data: Optional[List] = None
 
 
+# add type data for more transparency
+class Address_Data(BaseModel):
+    address: str
+    data: Dict | List | str
+
+    @field_validator("*")
+    def check_data(cls, v):
+        if not v:
+            raise ValueError("Data is empty")
+        return v
+
+
 class Parcel(BaseModel):
     data_combined: Dict[str, List] | None
 

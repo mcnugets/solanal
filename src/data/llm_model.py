@@ -45,14 +45,12 @@ from typing import List, Optional, Dict
 
 
 class token_basic(BaseModel):
-    ticker: Optional[str] = Field(
-        None, description="The ticker of the token", alias="ticker"
-    )
-    name: Optional[str] = Field(None, description="The name of the token", alias="name")
+    ticker: Optional[str] = Field(description="The ticker of the token", alias="ticker")
+    name: Optional[str] = Field(description="The name of the token", alias="name")
 
 
 class token_address(BaseModel):
-    full_address: str = Field(None, description="The address of the token")
+    full_address: str = Field(description="The address of the token")
 
     @field_validator("*")
     def address_validator(cls, v):
@@ -86,28 +84,35 @@ class PumpfunData(token_address, token_basic):
 
 class gmgn_main_data(token_address, token_basic):
     dev_sold_bought: Optional[str] = Field(
-        None, description="Developer sold/bought status", alias="dev sold/bought"
+        "", description="Developer sold/bought status", alias="dev sold/bought"
     )
-    age: Optional[str] = Field(None, description="Age of the token", alias="age")
+    age: Optional[str] = Field("", description="Age of the token", alias="age"
+                               )
     address: Optional[str] = Field(
-        None, description="Address of the token", alias="address"
+        "", description="Address of the token", alias="address"
     )
     liquidity: Optional[str] = Field(
-        None, description="Liquidity of the token", alias="liquidity"
+        "", description="Liquidity of the token", alias="liquidity"
     )
     total_holders: Optional[str] = Field(
-        None, description="Total number of holders", alias="total holders"
+        "", description="Total number of holders", alias="total holders"
     )
+    top_10: Optional[str] = Field(
+        "", description="top 10 holders percent", alias="Top 10")
+    
+    dev_holds:  Optional[str] = Field(
+        "", description="percent of dev holds", alias="dev holds")
+    
     volume: Optional[str] = Field(
-        None, description="Volume of the token", alias="volume"
+        "", description="Volume of the token", alias="volume"
     )
     market_cap: Optional[str] = Field(
-        None, description="Market cap of the token", alias="market cap"
+        "", description="Market cap of the token", alias="market cap"
     )
 
     @field_validator("*", mode="before")
     def validate_fields(cls, v, field):
-        if v is None or v == "":
+        if v is None:
             raise ValueError(f"{field.name} cannot be empty")
         return v
 
@@ -168,9 +173,9 @@ class holders_data(BaseModel):
 
 
 class valid_data(BaseModel):
-    pumpfun_data: gmgn_main_data | PumpfunData
-    gmgn_data: gmgn_data
-    holders: holders_data
+    pumpfun_data: gmgn_main_data | PumpfunData | None = None
+    gmgn_data_: gmgn_data | None = None
+    holders: holders_data | None = None
 
     @field_validator("*")
     def check_data(cls, v):
