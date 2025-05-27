@@ -5,26 +5,24 @@ import logging
 import time
 from src.core.logger import ScraperLogger as log
 from src.data.llm_model import valid_data
-from src.data.models import Pair_data, Parcel
+from src.data.models import Pair_data, Parcel, Address_Data
 from pydantic import BaseModel, field_validator
+from src.thread_related.distributor import dsitributor
 
 
-# maybe later??
 class validate_sources(BaseModel):
     pumpfun: str | None = None
+    gmgn_2: str | None = None
     gmgn: str | None = None
     holders: str | None = None
 
-    _allowed_sources: ClassVar[Set[str]] = {"pumpfun", "gmgn", "holders"}
+    _allowed_sources: ClassVar[Set[str]] = {
+        "pumpfun", "gmgn_2", "gmgn", "holders"
+    }
 
-    # @classmethod
-    # def required_sources(cls) -> Set[str]:
-    #     return cls.allowed_sources
-
-    @field_validator("pumpfun", "gmgn", "holders", mode="after")
+    @field_validator("pumpfun", "gmgn_2", "gmgn", "holders", mode="after")
     @classmethod
     def check_sources(cls, v) -> str:
-
         if not isinstance(v, str):
             raise TypeError("Sources must be a string")
         if v not in cls._allowed_sources:
@@ -36,29 +34,48 @@ class validate_sources(BaseModel):
 
 
 class DataCompiler:
-
     def __init__(
         self,
         input_queues: Dict[str, Queue],
         output_queue: Queue,
         logger: log,
         data_sources: validate_sources,
+        dsitributor: dsitributor,
+        topic: str,
     ):
-
         self.input_queues = input_queues
         self.output_queue = output_queue
         self.required_sources = list(
             data_sources.model_dump(exclude_none=True).values()
         )
-
         self.stop_event = Event()
         self.data_lock = Lock()
         self.compiled_data = {}
-        self.pending_addresses = set()  # Track addresses being processed
+        self.pending_addresses = set()
         self.thread = None
         self.logger = logger
+        self.distributor = dsitributor
+        
+        self.logger.log_warning(
+            "Input queues configuration: "
+            f"{ {k: str(v) for k, v in self.input_queues.items()} }"
+        )
+        self.logger.log_warning(
+            "CHECKING IF THE INPUT QUEUE NULL OR NOT: "
+            f"{type(self.input_queues.get(topic))}"
+        )
+        self.logger.log_info(
+            f"Queue for topic '{topic}': "
+            f"{str(self.input_queues.get(topic))}"
+        )
+        self.distributor.subscribe(
+            topic=topic,
+            queue=self.input_queues[topic],
+            queue_name='data_compiler'
+        )
 
     def start(self):
+        self.logger.log_info('Starting data compiler...')
         self.thread = Thread(target=self._compile_data)
         self.thread.start()
 
@@ -67,57 +84,65 @@ class DataCompiler:
             try:
                 self._process_input_queues()
                 self._process_complete_entries()
-
             except Exception as e:
                 logging.error(f"Critical error in compilation loop: {e}")
-                time.sleep(0.1)  # Prevent tight loop on errors
+                time.sleep(0.1)
 
     def _process_input_queues(self):
         """Handle input queue processing with dedicated error handling"""
         for source in self.required_sources:
             try:
-
                 if not self.input_queues[source].empty():
                     data = self.input_queues[source].get()
+                    self.logger.log_info(
+                        f"Processing data from {source} "
+                        f"(queue size now: {self.input_queues[source].qsize()})"
+                    )
                     self._process_single_data(source, data)
+            except KeyError as e:
+                self.logger.log_error(
+                    f"Missing queue configuration for required source {source}: {e}"
+                )
+                continue
             except Exception as e:
-                logging.error(f"Error processing queue {source}: {e}")
+                self.logger.log_error(
+                    f"Error processing queue {source}: {str(e)}",
+                    exc_info=True
+                )
                 continue
 
-    def _process_single_data(self, source: str, data: Pair_data):
+    def _process_single_data(self, source: str, data: Dict):
         """Process single data item with synchronization"""
         try:
             with self.data_lock:
-                if isinstance(data, Pair_data):
-                    address = self._extract_address(data.raw_data)
+                self.logger.log_info('checkung data lock threader data cmpiler')
+                if isinstance(data, Dict):
+                    self.logger.log_info('checking if isinstance is being True')
+                    address = self._extract_address(data)
                     if address:
-                        # Add to pending if new
                         self.pending_addresses.add(address)
-
-                        # Store the data
                         if address not in self.compiled_data:
                             self.compiled_data[address] = {}
                         self.compiled_data[address][source] = data
-                        logging.info(f"Stored {source} data for address {address}")
+                        self.logger.log_info(f"Stored {source} data for address {address}")
 
-                        # Check if we have all sources
+                        logging.info(f"Stored {source} data for address {address}")
                         if self._check_complete(address):
                             self._output_data(address)
-
         except Exception as e:
             logging.error(f"Error processing data from {source}: {e}")
 
     def _check_complete(self, address: str) -> bool:
         """Check if we have all required sources for an address"""
-        return set(self.compiled_data[address].keys()) == set(self.required_sources)
+        return (set(self.compiled_data[address].keys()) == 
+                set(self.required_sources))
 
     def _output_data(self, address: str):
         """Output complete data and cleanup"""
         try:
             combined_data = self._combine_data(self.compiled_data[address])
             self.output_queue.put(combined_data)
-            logging.info(f"Output complete data for {address}")
-
+            self.logger.log_info(f"Output complete data for {address}")
             self.logger.log_queue_status("FINAL QUEUE", self.output_queue)
             del self.compiled_data[address]
             self.pending_addresses.remove(address)
@@ -129,12 +154,12 @@ class DataCompiler:
         with self.data_lock:
             try:
                 for address, sources in list(self.compiled_data.items()):
-                    # Simple check for all required sources
                     if set(sources.keys()) == set(self.required_sources):
+                        self.logger.log_info('FINAL SETP OF COMPILING DATAS')
                         try:
                             combined_data = self._combine_data(sources)
                             self.output_queue.put(combined_data)
-                            logging.info(
+                            self.logger.log_info(
                                 f"Compiled data from all sources for {address}"
                             )
                             self.logger.log_queue_status(
@@ -145,13 +170,17 @@ class DataCompiler:
                             logging.error(f"Error combining data for {address}: {e}")
                     else:
                         missing = set(self.required_sources) - set(sources.keys())
-                        # logging.info(f"Address {address} missing sources: {missing}")
+                        self.logger.log_warning(
+                            f"Address {address} missing sources: {missing}"
+                        )
             except Exception as e:
                 logging.error(f"Error processing entries: {e}")
 
     def _combine_data(self, sources: Dict[str, Pair_data]) -> Parcel:
         """Combine data from different sources into a single Pair_data object"""
-        combined = {keys: sources[keys].raw_data for keys in self.required_sources}
+        combined = {
+            keys: sources[keys].raw_data for keys in self.required_sources
+        }
         return Parcel(data_combined=combined)
 
     def _extract_address(self, data: str | List[str]) -> str:
@@ -159,8 +188,8 @@ class DataCompiler:
         try:
             if isinstance(data, str) and "#" in data:
                 return data.split("#")[-1]
-            if isinstance(data, list):
-                return data[-1]
+            if isinstance(data, Dict):
+                return data['full_address']
             return None
         except Exception as e:
             logging.error(f"Error extracting address: {e}")

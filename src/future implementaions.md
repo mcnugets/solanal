@@ -167,3 +167,31 @@ Would you like me to elaborate on any of these suggestions or show how to implem
 - save to CSV for manual checks
 - recover
 - genereta summary of failed collected coins and successfully collected coins
+
+12. **Detailed gmgn data scraping**
+- We will need to implement a advanced scraped data mapping where we have optional labels as shown below adn we dynamically assign them based on: class, and their required position(index)
+- ```
+
+    optional_labels = {
+        "Top 10": {
+            "enabled": False,
+            "selectors": ["css-mj0ydb", "css-1l8bjw7"]
+        },
+        "Dev holds": {
+            "enabled": False,
+            "selectors": ["css-1oxfeie", "css-1x9rvdf"]
+        },
+        "insiders": {
+            "enabled": False,
+            "selectors": ["css-kpoa7z", "css-13cuc7t"]
+        },
+        "snipers": {
+            "enabled": False,
+            "selectors": ["css-15hwqib", "css-1qsb47y"]
+        },
+        "rug": {
+            "enabled": False,
+            "selectors": ["css-15hwqib"]
+        }
+    }
+```

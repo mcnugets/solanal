@@ -23,7 +23,9 @@ from itertools import zip_longest
 # ]
 class DataFrameManager:
 
-    def __init__(self, logger: logger, base_file, columns: Optional[List[str]] = None):
+    def __init__(self, logger: logger, scraper_type: str, base_file, columns: Optional[List[str]] = None):
+        
+        self.scraper_type = scraper_type
         self.df = pd.DataFrame()
         self.base_file = base_file
         self.columns = columns
@@ -36,84 +38,79 @@ class DataFrameManager:
             level=logging.INFO,
             format="%(asctime)s - %(levelname)s - %(message)s",
         )
+    # def gmgn_main(self, data: List[str]) -> Dict[str, str]:
+    
+    #     try:
+    #         CORE_LABELS = 7
+    #         map_core = {}
+    #         gmgn_2_copy = self.columns.copy()  # Use self.columns instead of undefined gmgn_2
+            
+    #         # Handle percentage case in core data
+    #         if '%' in data[CORE_LABELS]:
+    #             index = len(self.columns) - (CORE_LABELS - 1)
+    #             map_core[self.columns[index]] = None
+    #             gmgn_2_copy.pop(index)
+    #             CORE_LABELS -= 1
+                
+    #         # Map core labels
+    #         for i in range(min(CORE_LABELS, len(data))):
+    #             map_core[gmgn_2_copy[i]] = data[i]
+           
+    #         # Map last 3 items (volume, market cap, full_address)
+    #         N_ITER = 3
+    #         map_last = {}
+    #         for i in range(min(N_ITER, len(data))):
+    #             map_last[self.columns[-i - 1]] = data.pop()
+                
+    #         logging.info(f'Mapped last items: {map_last}')
+    #         new_mapped_data = {**map_core, **map_last}
+    #         logging.info(f'Final mapped data: {new_mapped_data}')
+    #         return new_mapped_data
+            
+    #     except Exception as e:
+    #         logging.error(f'Error processing GMGN data: {e}')
+    #         return {}
+    
+    def gmgn_main(self, data: List[str]) -> Dict[str, str]:
+    
+        try:
+            # Extract and validate address
+            address_part = data[3].partition('.')[0]
+            self.logger.log_info(f'Validating address: {address_part}')
+            
+            if address_part not in data[-1]:
+                data = data[1:]  # Skip first element if address doesn't match
+                
+            # Prepare data for DataFrame
+            row_data = data[:len(self.columns)-1] + [data[-1]]  # Combine all but last with last
+            
+            # Create dictionary mapping columns to values
+            row_dict = dict(zip(self.columns, row_data))
+            
+            self.logger.log_info(f'Processed row data: {row_dict}')
+            return row_dict
+            
+        except Exception as e:
+            self.logger.log_error(f'Error processing GMGN data: {e}')
+            return {}
+    
+    def gmgn_secondary(self, data: List[str]) -> Dict[str, str]:
+        return  dict(zip(self.columns, data))
+    def run_map_strategy(self, scraper_type: str, data: List[str]):
+        row_dict = None
+        if scraper_type == "gmgn_2":
+            row_dict = self.gmgn_main(data)
+        if scraper_type == "gmgn":
+            row_dict = self.gmgn_secondary(data)
+        return row_dict
 
     def process_data(self, data: List[str] | Dict) -> Dict:
         try:
             if self.columns is None:
                 return data
-
-            # Convert list to DataFrame row
-            data_len = len(data)
-            expected_len = len(self.columns)
-            col = self.columns[::-1]
-            data = data[::-1]
-            row_dict = {}
-            if data_len != expected_len:
-                self.logger.log_warning(
-                    f'mismatch between the data and the columns length, expected {expected_len}, got {data_len}'
-                )
-               
-                if data_len < expected_len:
-                    
-                    if data_len == expected_len - 1:
-                        
-                        check_latest_el = data[-1]
-                        second_last_el = data[-2]
-                        third_last = data[-3]
-                       
-                       
-                       
-                        if check_latest_el in second_last_el and third_last not in ["Buy","Run"]:
-                            data.pop()
-
-                        
-                        data = data[::-1]
-                        
-                        for col in col:
-                            print(data[-1])
-                            if col == "Top 10":
-                                if data[-1][-1] == '%':
-                                    row_dict[col] = data.pop()
-                                    continue
-                                row_dict[col] = ""
-                                continue
-                                        
-                            
-                            if col == "Dev holds": 
-                                if data[-1][-1] == '%':
-                                    row_dict[col] = data.pop()
-                                    continue
-                                row_dict[col] = ""
-                                continue
-                            row_dict[col] = data.pop()
-                                
-
-                    if data_len ==  expected_len - 2:
-                        data = data[::-1]
-                
-                        for col in col:
-                            if col == "Top 10":
-                                row_dict[col] = ""
-                                continue
-                            if col == "Dev holds":
-                                row_dict[col] = ""
-                                continue
-                            row_dict[col] = data.pop()
-                        self.logger.log_info(f' balls itch {row_dict}')
-                   
-
-            if not row_dict:
-                row_dict = dict(zip(col, data))
-                self.logger.log_info(f' the row dict BALLS{row_dict}')
-            # row_dict = {
-            #     col: val for col, val in zip_longest(self.columns, data, fillvalue="")
-            # }
-            # if "" in row_dict:
-            #     row_dict.pop("")
-
-            self.logger.log_info(f"the data in dataframe manager: {row_dict}")
-
+  
             # section for adding to queue
+            row_dict = self.run_map_strategy(self.scraper_type, data=data)
 
             new_row = pd.DataFrame([row_dict])
             new_row = new_row.astype(str)
@@ -196,13 +193,11 @@ gmgn = [
 gmgn_2 = [
         "ticker",
         "name",
-        "dev sold/bought",
         "age",
         "address",
-        "liquidity",
+        "migrated",
         "total holders",
-        "Top 10",
-        "Dev holds",
+        "TX",
         "volume",
         "market cap",
         "full_address",
@@ -229,7 +224,7 @@ data_sample_2 = [
     "Audit",
     "11cfd6acd78d06c7c555f91a427e9d10.webp",
 ]
-data_sample_3 = ['0x', '0xa', '0xa', 'Buy', '1s', 'Gq7XD...oop', '$0', '--', '$0', '$0', 'Gq7XDXZ3ZYxfXHbpbtRsL5S7EmiwpW68vn1BKrQboop']
+data_sample_3 = ['NODEGO', 'NODEGOAI', '25s', 'BbaqD...mHC', '1', '2', '0%', '0%', 'Run', '$315.4', '$68.9K', 'wpeori345345pump']
 
 
 def main():

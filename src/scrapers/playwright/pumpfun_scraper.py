@@ -71,14 +71,17 @@ class pumpfun_scraper(Base_scraper_p):
         self.div_locator = div_locator
         self.seen = set()
         self.is_website_ready = False
+        self.is_popuphandled = False
 
     def setup_website(self):
         try:
             self.fetch_url()
-            self.handle_popup()
+            if  self.is_popuphandled:
+                self.is_popuphandled = True
+                self.handle_popup()
             # if self.extra_locator:
             #     self.handle_extra()
-            self.table = self._page.locator(self.main_locator)
+           
             logging.info("Website setup completed successfully.")
             self.is_website_ready = True
         except Exception as e:
@@ -89,75 +92,84 @@ class pumpfun_scraper(Base_scraper_p):
 
     # (By.TAG_NAME, "tr")
     def _scrape_data(self):
-        try:
-            if not self.is_website_ready:
-                self.setup_website()
-            if self.table is None:
-                error_msg = "Table locator not found - website may not have loaded properly"
-                self._logger.log_warning(message="Table locator not found ")
-                self._logger.log_info("Attempting to re-setup website...")
-                self.setup_website()
+        while True:
+            try:
+                if not self.is_website_ready:
+                    self.setup_website()
+                self._page.wait_for_selector(self.main_locator)
+                self.table = self._page.locator(self.main_locator)
                 if self.table is None:  # Check again after retry
-                    self._logger.log_critical(error_msg="Table still not found after retry, aborting scrape")
-                    raise RuntimeError("Critical: Failed to locate table element after retry")
-            divs = self.table.locator(self.row_locator)
-            rows = divs.all()
-            print(len(divs.all()))
-            print("works")
-        
-            for row in rows:
-                
-                try:
-                    first_cell: Locator = None
-                    link_element = None
-                    if self.div_locator:
-                        
-                        elements = row.locator(self.div_locator).all()
-                        first_cell = elements[1]
-                        link_element = elements[0].locator("a")
-                    else:
-                        first_cell = row
-                        link_element = first_cell.locator('a').all()
-
-                    # if not first_cell:
-                    #     continue
-                    print(first_cell.inner_text())
-                    fltered_data = self.filter_noise(first_cell.inner_text())
-                    print(fltered_data)
-                    if fltered_data == None:
-                        continue
-                    
-                
-                    if link_element:
-                        href = link_element[0].get_attribute("href")
-                        address = href.split("/")[-1]
-                        fltered_data += "#" + address
-                    if address in self.seen:
-                        print(f"already seen: {address} Skipping..")
-                        continue
-                    self.seen.add(address)
-
-               
-                    print("THE YIELDING SECTION")
-        
-                    yield self.validate_unprocessed(data=fltered_data, address=address)
-                except TimeoutError:
-                    print("Element became stale or not found, re-locating...")
+                    self._logger.log_warning(error_msg="Table still not found, retrying....")
                     continue
-                except Error as e:
-                    if "Target closed" in str(e):
-                        print("Browser window closed, breaking out of loop.")
-                        break
-            # time.sleep(5)
-
-        except Exception as e:
-            print(f"There was an error in data scraping {e}")
-            msg = f"An error occurred during data scraping: "
+                self.table.wait_for(state='visible', timeout=5000)
+                divs = self.table.locator(self.row_locator)
+                rows = divs.all()
+                print(len(divs.all()))
+                print("works")
             
-            self._logger.log_error(error_msg=msg, exc_info=e)
+                for i, row in enumerate(rows):
+                    print(f' index {i}   length {len(rows)-1}')
+                    try:
+                        first_cell: Locator = None
+                        link_element: Locator = None
+                        if self.div_locator:
+                            
+                            elements = row.locator(self.div_locator).all()
+                            first_cell = elements[1]
+                            link_element = elements[0].locator("a")
+                        else:
+                            first_cell = row
+                            link_element = first_cell.locator('a').all()
+                  
+                        # if not first_cell:
+                        #     continue
+                        first_cell.wait_for(state='visible', timeout=2000)
+                        fltered_data = self.filter_noise(first_cell.inner_text(timeout=5000))
+                        print(fltered_data)
+                        if fltered_data == None:
+                            print('the variable is NULL wil vause issues')
+                            continue
+                        
+                        noise_links = ["lens.google", "x.com", "instagram", "youtube"]
+                        if link_element: 
+                            href = None
+                            for thelink in link_element:
+                                temp_href = thelink.get_attribute("href")
+                                if any(s in temp_href for s in noise_links):
+                                    continue
+                                href = temp_href
+                                  
+                            address = href.split("/")[-1]
+                            fltered_data += "#" + address
+                        if address in self.seen:
+                            print(f"already seen: {address} Skipping..")
+                            # time.sleep(3)
+                            continue
+                        self.seen.add(address)
 
-        finally:
-            pass
+                        
+                        print("THE YIELDING SECTION")
+            
+                        yield self.validate_unprocessed(data=fltered_data, address=address)
+                    
+                    except TimeoutError:
+                        print("Element became stale or not found, re-locating...")
+                        time.sleep(5)
+                        continue
+                    except Error as e:
+                        if "Target closed" in str(e):
+                            print("Browser window closed, breaking out of loop.")
+                #             break
+                time.sleep(5)
+
+            except Exception as e:
+                print(f"There was an error in data scraping {e}")
+                msg = f"An error occurred during data scraping: "
+                
+                self._logger.log_error(error_msg=msg, exc_info=e)
+
+        # finally:
+        #     pass
     def filter_noise(self, raw_data: str) -> str | None:
         
         try:
@@ -170,7 +182,7 @@ class pumpfun_scraper(Base_scraper_p):
 
             # Check if the cleaned list length is within range
             if 11 <= len(segments) <= 50:
-                return '#'.join(segments)
+                return '\n'.join(segments)
 
             return None
             

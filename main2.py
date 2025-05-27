@@ -7,14 +7,14 @@ from threading import Event
 import signal
 import time
 from selenium.webdriver.support import expected_conditions as EC
-from config import queue_m
+from src.core.config import queue_m
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 import time
 from src.thread_related.factories.threader_factory import threader_factory
-from config import CONFIG, SCRAPERS, SCRAPER_CONFIGS, GLOBAL_CONFIG
+from src.core.config import CONFIG, SCRAPERS, SCRAPER_CONFIGS, GLOBAL_CONFIG
 from src import (
     DataCompiler,
     Scraper_Manager,
@@ -28,7 +28,8 @@ from src import (
     validate_sources,
 )
 from src.DataFrameManager import DataFrameManager
-
+from src.thread_related.distributor import dsitributor
+from queue import Queue
 logger = ScraperLogger()
 
 # TODO: things fo configer:
@@ -152,16 +153,22 @@ def extract_dynamic_table_data_2(columns: List[str] = None):
 
 def orchestrator(scrape_manager: Scraper_Manager):
 
+    topic = "gmgn_2" # central point of our distributor
+    distributor = dsitributor(logger=logger)
     gmgn_2_output_queue = queue_m.get_queue("gmgn_2")["output_queue"]
-    gmgn_output_queue = queue_m.get_queue("gmgn")["output_queue"]
+    # gmgn_output_queue = queue_m.get_queue("gmgn")["output_queue"]
     solscan_output_queue = queue_m.get_queue("holders")["output_queue"]
+
+
+    to_solscan_scraper = Queue()
 
     fac = threader_factory()
     gmgn_two = fac.create_threader(
         threader_type="scrapers",
         scraper_type="gmgn_2",
         configs=CONFIG,
-        output_queue=gmgn_2_output_queue,
+        distributor=distributor,
+        topic=topic
     )
 
     # gmgn_one = fac.create_threader(
@@ -172,17 +179,27 @@ def orchestrator(scrape_manager: Scraper_Manager):
     #     input_queue=gmgn_2_output_queue,
     # )
 
-    # solscan = fac.create_threader(
-    #     threader_type="scrapers",
-    #     scraper_type="solscan",
-    #     configs=CONFIG,
-    #     input_queue=gmgn_2_output_queue,
-    #     output_queue=solscan_output_queue,
-    # )
+    solscan = fac.create_threader(
+        threader_type="scrapers",
+        scraper_type="solscan",
+        configs=CONFIG,
+        input_queue=gmgn_2_output_queue,
+        output_queue=solscan_output_queue,
+        distributor=distributor,
+        topic=topic
+    )
+
+    datacompiler = fac.create_data_compiler(configs=CONFIG['global'], distributor=distributor, topic=topic)
+
+    
+
+    scrape_manager.add_scraper_v2(solscan)
+    datacompiler.start()
+ 
     scrape_manager.add_scraper_v2(gmgn_two)
     # scrape_manager.add_scraper_v2(gmgn_one)
-    # scrape_manager.add_scraper_v2(solscan)
     scrape_manager.start()
+
 
 
 
@@ -205,19 +222,21 @@ gmgn = [
 gmgn_2 = [
         "ticker",
         "name",
-        "dev sold/bought",
-        "age",
+        "age",       
         "address",
         "liquidity",
         "total holders",
-        "Top 10",
-        "Dev holds",
         "volume",
         "market cap",
+        "Top 10",
+        "Dev holds",
+        "insiders",
+        "snipers"
+        "rug"
         "full_address",
     ]
 
-
+# BichiBichi30m Cf7Gk...onk Liq$51.8K64038V$514.2KMC$135.8K20% 0.3% snipers3 rug7% delete this: Buy
 data_sample = [
     "6p8ez...Aq4",
     "$0.0000",
@@ -294,12 +313,14 @@ def test_case_pumpfun():
         popup_locator="/html/body/div[2]/div[1]/div[3]"
     )
 
-    try:
+    # try:
+    while True:
         result =  pumpfun_scraper_instance.start_scrape()
         boom = next(result)
         print(boom)
-    except StopIteration:
-        print("No more data to scrape")
+
+    # except StopIteration:
+    #     print("No more data to scrape")
 
 
  
@@ -320,6 +341,8 @@ if __name__ == "__main__":
     
     manager_ = Scraper_Manager(logger=logger)
     orchestrator(manager_)
+
+    # test_case_pumpfun()
 
 # from selenium import webdriver
 # from selenium.webdriver.common.by import By

@@ -20,6 +20,7 @@ class solscan_scraper(Base_scraper_p):
 
     def __init__(
         self,
+        logger,
         main_locator: str,
         popup_locator: str, 
         row_locator: str,
@@ -84,7 +85,7 @@ class solscan_scraper(Base_scraper_p):
                     print(f"downloaded file {download_file}")
                     if download_file:
                         df_holders = pd.read_csv(download_file)
-                        self._logger.log_info(message=f"THE FILE IS: {df_holders}")
+                        self._logger.log_info(message=f" {df_holders}")
                         custom_path = Path(download_file)
                         new_name = f"{address}_data.csv"
                         self.rename_file_with_retry(custom_path, new_name)
@@ -104,11 +105,11 @@ class solscan_scraper(Base_scraper_p):
         """
         download_path = Path(self.download_path)
         end_time = time.time() + timeout
-
+        time.sleep(2)
         while time.time() < end_time:
-            files = list(download_path.glob("*.csv"))  # Check only for CSV files
+            files = list(download_path.glob("*"))  # Check only for CSV files
             if files:
-                newest_file = max(files, key=os.path.getctime)  # Most recently created
+                newest_file = max(files, key=os.path.getmtime)  # Most recently created
 
                 # Check if the file is still being modified (crude check)
                 initial_size = os.path.getsize(newest_file)
@@ -148,7 +149,7 @@ class solscan_scraper(Base_scraper_p):
         
         for attempt in range(1, retries + 1):
             try:
-                src.replace(new_path)  # Use replace() instead of rename() for cross-platform atomicity
+                src.rename(new_path)  # Use replace() instead of rename() for cross-platform atomicity
                 self._logger.log_info(f"Successfully renamed file to {new_path}")
                 return
             except PermissionError as e:

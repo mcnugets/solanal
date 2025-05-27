@@ -43,6 +43,7 @@ class gmgn_scraper(Base_scraper_p):
 
                 self._logger.log_info("GMGN ACTIVATED")
                 address_data: ad = self._deque.pop()
+                self._logger.log_info(f'the address {address_data.address}')
                 self.fetch_url(address_data.address)
                 self.handle_popup()
 

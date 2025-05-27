@@ -1,13 +1,13 @@
 from typing import Tuple, Literal, Annotated, Optional, List, Any, Union
-from playwright.async_api import Browser, Playwright, BrowserContext, async_playwright, Page
+from playwright.sync_api import Browser, Playwright, BrowserContext, sync_playwright, Page
 from collections import deque
 from src.data.models import Address_Data as ad
 from abc import abstractmethod
-from playwright_stealth import stealth_async
+from playwright_stealth import stealth_sync
 from src.core.logger import ScraperLogger as log
-
-from contextlib import asynccontextmanager
-
+from fake_useragent import UserAgent
+from contextlib import contextmanager
+from pathlib import Path
 class Base_scraper_p:
     def __init__(
         self,
@@ -36,84 +36,112 @@ class Base_scraper_p:
 
 
     @abstractmethod
-    async def _scrape_data(self) -> ad | None:
+    def _scrape_data(self) -> ad | None:
         pass
     
+    # TODO: future note to myself: create pydantic model for the data
     def validate_unprocessed(
         self, address: str | None = None, data: List | str | None = None
     ) -> ad:
         return ad(address=address, data=data)
     
-    async def setup_browser(self, p: Playwright):
-        browser = await p.chromium.launch(headless=False,
-                                        args=[
-                                            "--no-sandbox",
-                                            "--disable-setuid-sandbox",
-                                            "--disable-dev-shm-usage",
-                                            "--disable-gpu",
-                                            '--disable-popup-blocking',
-                                            '--enable-javascript'
-                                        ],
+    def setup_browser(self, p: Playwright):
+    
+        launch_args = [
+            "--disable-blink-features=AutomationControlled",
+            "--no-sandbox",
+            "--disable-gpu",
+            "--disable-dev-shm-usage",
+            "--window-size=1920,1080",
+            "--start-maximized",  
+            "--disable-popup-blocking",
+            "--incognito",
+            "--disable-setuid-sandbox",
+            "--enable-javascript"
+        ]
+        browser = p.chromium.launch(headless=False,
+                                        args=launch_args,
                                         downloads_path=self.download_path)
         return browser
     
-    async def setup_context(self, browser: Browser):
-         user_agent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.7049.114 Safari/537.36"
-         context = await browser.new_context(
-                 user_agent=user_agent,
-                 ignore_https_errors=True,
-                 accept_downloads=True
+    def setup_context(self, browser: Browser):
+        # user_agent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.7049.114 Safari/537.36"
+        ua = UserAgent()
+        user_agent = ua.random
+        context = browser.new_context(
+                user_agent=user_agent,
+                ignore_https_errors=True,
+                storage_state="auth.json" if Path("auth.json").exists() else None,
+                extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
+                accept_downloads=True # Enable downloads
+                #  record_download_dir=self.download_dir, # Set download location
+                 # Add other context options here (permissions, storage state, etc.)
             )
-         return context
-
-    async def setup_page(self, context: BrowserContext):
-        page = await context.new_page()
+        return context
+    def save_session(self):
+        if self._context:
+            self._context.storage_state(path="auth.json")  # Save cookies
+    def setup_page(self, context: BrowserContext):
+        page = context.new_page()
+        # stealth_sync()
         return page
-
-    async def run_p(self):
+    # TODO: saving this as a potential further development
+    # def goto(self, page: Page):
+    #     page.goto(self.url)
+    def run_p(self):
         try:
             if not self._page:
-                self._pw = await async_playwright().start()
-                self._browser = await self.setup_browser(self._pw)
-                self._context = await self.setup_context(self._browser)
-                self._page = await self.setup_page(self._context)
+                p = sync_playwright()
+                self._pw = p.start()
+                self._browser = self.setup_browser(self._pw)
+                self._context = self.setup_context(browser=self._browser)
+         
+                self._page = self.setup_page(context=self._context)
         except Exception as e:
             self._logger.log_error(f"Failed to initialize Playwright: {str(e)}", exc_info=e)
+            # Clean up any partially initialized resources
             if hasattr(self, '_page') and self._page:
-                await self._page.close()
+                self._page.close()
             if hasattr(self, '_context') and self._context:
-                await self._context.close()
+                self._context.close()
             if hasattr(self, '_browser') and self._browser:
-                await self._browser.close()
+                self._browser.close()
             if hasattr(self, '_pw') and self._pw:
-                await self._pw.stop()
-            raise
+                self._pw.stop()
+            raise  # Re-raise to allow higher level handling
       
-    @asynccontextmanager
-    async def session(self):
+    @contextmanager
+    def session(self):
+    
         try:
-            await self.run_p()
-            yield self
+            self.run_p()  # Initialize Playwright and browser
+            yield  # Yield the instance for use in with block
         except Exception as e:
             self._logger.log_error(f"Error during Playwright session: {str(e)}", exc_info=e)
             raise
-        finally:
-            await self.cleanup()
-
-    async def start_scrape(self):
+        # finally:
+            # # self.cleanup()  # Ensure resources are always cleaned up
+            # self.save_session()
+    def start_scrape(self):
         try:
-            async with self.session():
+            with self.session():
                 try:
-                    balls = await self._scrape_data()
-                    yield from self._scrape_data()
+               
+                    yield from  self._scrape_data()
                 except Exception as e:
-                    self._logger.log_error(f"Error during data scraping: {str(e)}", exc_info=e)
+                    self._logger .log_error(f"Error during data scraping: {str(e)}", exc_info=e)
                     raise
         except Exception as e:
             self._logger.log_error(f"Error during scraping session: {str(e)}", exc_info=e)
             raise
 
-    async def handle_popup(self):
+
+
+    # def load_html_element(self):
+    #     pass
+    # def _get_element(self):
+    #     pass
+    def handle_popup(self):
         try:
             if not self.popup_locator:
                 return
@@ -123,8 +151,8 @@ class Base_scraper_p:
             
             try:
                 popup = self._page.locator(self.popup_locator)
-                if await popup.count() > 0:
-                    await popup.click()
+                if popup.count() > 0:
+                    popup.click()
                     self._logger.log_info("Successfully handled popup")
                 else:
                     self._logger.log_warning("Popup locator not found on page")
@@ -136,19 +164,24 @@ class Base_scraper_p:
             self._logger.log_error(f"Unexpected error in handle_popup: {str(e)}", exc_info=e)
             raise
 
-    async def fetch_url(self, url_query: str = "") -> None:
+   
+    def fetch_url(self, url_query: str = "") -> None:
+        
         url = f'{self.url}{url_query}'
+        self._logger.log_info(f'the url itself mothafucka: {url}')
         try:
-            await self._page.goto(url=url)
+            self._page.goto(url=url)  # 10 second timeout
+            self._page.wait_for_load_state()  # Wait for all network activity to settle
         except Exception as e:
             raise RuntimeError(f"Failed to navigate to URL {url}: {e}") from e
 
-    async def cleanup(self):
+    def cleanup(self):
+      
         if self._page is not None:
-            await self._page.close()     
+            self._page.close()     
         if self._context is not None:
-            await self._context.close()  
+            self._context.close()  
         if self._browser is not None:
-            await self._browser.close()   
-        if self._pw is not None:
-            await self._pw.stop()
+            self._browser.close()   
+        if  self._pw is not None:
+             self._pw.stop()

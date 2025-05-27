@@ -49,7 +49,7 @@ class scrape_service(base_service):
                                 timeout=2
                             )  # Prevent tight loop if input queue is empty
                             # continue
-
+                    self.logger.log_info("Starting scraping...")
                     scrape_gen = self.scraper.start_scrape()
                     temp_pair_data: ad = next(
                         scrape_gen
@@ -63,7 +63,7 @@ class scrape_service(base_service):
 
                         self.thread_r.condition.notify_all()
                         # Add data and notify
-
+                    time.sleep(3)
                 except StopIteration:
                     self.logger.log_info("Scraping completed - no more data to scrape")
                     break  # Exit the loop when scraping is complete
@@ -78,8 +78,8 @@ class scrape_service(base_service):
                     continue  # Continue scraping for non-critical errors
         except Exception as e:
             self.logger.log_error(f"Error during scraping: {str(e)}", exc_info=e)
-        finally:
-            self.cleanup()
+        # finally:
+        #     self.cleanup()
 
     
     def cleanup(self):

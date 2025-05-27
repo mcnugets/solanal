@@ -72,7 +72,7 @@ class ScraperLogger:
 
         # Create formatters and add it to the handlers
         file_formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+            "%(asctime)s | %(levelname)s | %(filename)s:%(lineno)d | %(funcName)s | %(message)s"
         )
         console_formatter = logging.Formatter("%(levelname)s: %(message)s")
 

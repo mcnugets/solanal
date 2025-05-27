@@ -83,31 +83,41 @@ class PumpfunData(token_address, token_basic):
 
 
 class gmgn_main_data(token_address, token_basic):
-    dev_sold_bought: Optional[str] = Field(
-        "", description="Developer sold/bought status", alias="dev sold/bought"
+    age: str = Field(
+        description="Age of the token", alias="age"
     )
-    age: Optional[str] = Field("", description="Age of the token", alias="age"
-                               )
-    address: Optional[str] = Field(
-        "", description="Address of the token", alias="address"
+    address: str = Field(
+        description="Address of the token", alias="address"
     )
-    liquidity: Optional[str] = Field(
-        "", description="Liquidity of the token", alias="liquidity"
+    liquidity: Optional[str] = Field(None,
+        description="Liquidity of the token", alias="liquidity"
     )
-    total_holders: Optional[str] = Field(
-        "", description="Total number of holders", alias="total holders"
+    total_holders: str = Field(
+        description="Total number of holders", alias="total holders"
+    )
+    volume: str = Field(
+        description="Volume of the token", alias="volume"
+    )
+    market_cap: str = Field(
+        description="Market cap of the token", alias="market cap"
     )
     top_10: Optional[str] = Field(
-        "", description="top 10 holders percent", alias="Top 10")
-    
-    dev_holds:  Optional[str] = Field(
-        "", description="percent of dev holds", alias="dev holds")
-    
-    volume: Optional[str] = Field(
-        "", description="Volume of the token", alias="volume"
+        None, description="Percentage held by top 10 holders", alias="Top 10"
     )
-    market_cap: Optional[str] = Field(
-        "", description="Market cap of the token", alias="market cap"
+    dev_holds: Optional[str] = Field(
+        None, description="Percentage of tokens held by dev", alias="Dev holds"
+    )
+    insiders: Optional[str] = Field(
+        None, description="Insider activity status", alias="insiders"
+    )
+    snipers: Optional[str] = Field(
+        None, description="Number of sniper wallets detected", alias="snipers"
+    )
+    rug: Optional[str] = Field(
+        None, description="Rug pull risk indicator", alias="rug"
+    )
+    migrated: Optional[str] = Field(
+        None, description="How many dev coins migrated", alias="migrated"
     )
 
     @field_validator("*", mode="before")

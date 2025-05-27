@@ -15,7 +15,7 @@ from src.thread_related.scraper_threaders.services.resources import (
     thread_resources as tr,
     queue_resources as qr,
 )
-
+from src.thread_related.distributor import dsitributor
 
 class scraper_thread(base_threader):
 
@@ -29,16 +29,24 @@ class scraper_thread(base_threader):
         saver: Iservice,
         wait_event: Iservice,
         scraper: Iservice,
+        topic: str,
+        distributor: dsitributor,
         input_queue: Queue = None,
         output_queue: Queue = None,
     ):
 
         super().__init__(name, logger, thread_r, queue_r, input_queue, output_queue)
 
+
+        if self.input_queue:
+            distributor.subscribe(topic=topic, queue=input_queue, queue_name=self.name)
+        self.distributor = distributor
         self.text_processor = text_processor
         self.saver = saver
         self.wait_event = wait_event
         self.scraper = scraper
+
+    
 
         self.register_method("_wait", self._wait)
         self.register_method("_scrape", self._scrape)
@@ -62,7 +70,10 @@ class scraper_thread(base_threader):
 
     def _save(self):
         if self.saver:
-            self.saver.run(self.output_queue)
+            if self.text_processor:
+                self.saver.run(self.output_queue, local_queue=self.queue_r.processed_queue)
+            else:
+                self.saver.run(self.output_queue, local_queue=self.queue_r.data_buffer)
 
     # imroove this method later by centraling the cleanup process
     # and removing the need for this method in the child classes

@@ -7,7 +7,7 @@ from src.thread_related.scraper_threaders.services.resources import (
 )
 from src.data.models import Address_Data as ad
 from src.scrapers.Base_scraper import Base_scraper
-
+from pydantic import BaseModel
 
 class wait_service(base_service):
     def __init__(
@@ -20,11 +20,13 @@ class wait_service(base_service):
     ):
         super().__init__(logger, thread_r, queue_r, scraper, is_input_queue)
 
-    def run(self, input_queue: Queue):
+     
+
+    def run(self, input_queue: Queue[BaseModel]):
         while not self.thread_r.stop_event.is_set():
             try:
 
-                data = input_queue.get(timeout=2)
+                data = input_queue.get(timeout=2).model_dump()
                 self.logger.log_info(data["full_address"])
                 validated_data = ad(data=data, address=data["full_address"])
                 self.is_input_queue = True

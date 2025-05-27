@@ -1,9 +1,9 @@
 from typing import Optional, Dict, List
 import re
 
-from src.core.logger import ScraperLogger as log
+# from src.core.logger import ScraperLogger as log
 from colorama import init, Fore, Back, Style
-
+import logging as log
 init()
 
 CLEANING_PATTERNS_g = {
@@ -30,7 +30,8 @@ class TextProcessor:
 
     def setup_reg(self, patterns):
         esc = [re.escape(i) for i in patterns]
-        pattern_ = re.compile(r"(?<!\S)(?:" + "|".join(esc) + r")(?!\S)")
+        # re.compile('(?<!\\S)(?:Liq|Vol|\\?|V|MC)(?!\\S)')
+        pattern_ = re.compile(r"(?<!\\S)(?:" + "|".join(esc) + r")(?!\S)")
 
         print(f" the indicators  {pattern_}")
         return pattern_
@@ -140,10 +141,10 @@ def main():
     cleaning_pat = CLEANING_PATTERNS_g
 
     # Instantiate the TextProcessor
-    tp = TextProcessor(logger=logger, patterns=patterns, CLEANING_PATTERNS=cleaning_pat)
+    tp = TextProcessor(logger=logger, patterns=patterns_2, CLEANING_PATTERNS=cleaning_pat)
 
     # Sample raw data containing newlines and a '#' split marker
-    raw_data = " CHROME\nCHROME\n0%\nRun\n4E35w...yBc\nName\nCA\n$0.0\u208542131\n24h\n-13.94%\nSnipers\n>\n4\n/\n8\nBlueChip\n>\n0%\nTop 10\n5.8%\nAudit\n>\nSafe\n4/4\nTaxes\nDex\n1%#4E35wqoubSGPJGyubeLM9kimxsoxDnNaKZRdw9LS7yBc"
+    raw_data = "CKXU8ygmwS8BKgvvPBJY4bBACpVaQtbd6UgELUDT4pDa' data='ZALA\nZ△L△ △I\n46s\nCKXU8...pDa\nLiq\n$105.2K\n108\nV\n$2.1K\nMC\n$1.1M\n?\n9%\n0.5%\n5\nBuy\nCKXU8ygmwS8BKgvvPBJY4bBACpVaQtbd6UgELUDT4pDa"
     like_it_raw = "EdgeCoin\nMicroSoft Edge Secret Coin\nBuy\n3s\n7cbJG...k8T\nLiq\n$2.34\n0\nV\n$0\nMC\n$0#7cbJGkeEVRH5BjVgA8MLAdpM5K8Gtizftri9q8fm9k8T"
     print("Raw data:", raw_data)
 
