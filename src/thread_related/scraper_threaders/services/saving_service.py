@@ -38,7 +38,7 @@ class saving_service(base_service):
         while not self.thread_r.stop_event.is_set():
             try:
                 with self.thread_r.condition:
-                    if not self.queue_r.processed_queue.empty():
+                    if not local_queue.empty():
                         address_data: ad = local_queue.get(
                             timeout=1
                         )
@@ -51,7 +51,8 @@ class saving_service(base_service):
                         processed = self.df_manager.process_data(
                             data=address_data.data
                         )
-                        if not isinstance(processed, dict):
+                        if (not isinstance(processed, dict)  
+                            and not isinstance(processed, list)):
                             self.logger.log_error(
                                 error_msg="invalid data row skipping",
                                 exc_info=address_data.data,
@@ -59,7 +60,11 @@ class saving_service(base_service):
                             continue
 
                         try:
+                            # TODO: A TEMPORARY SOLUTION CHNAGE IT LATER ONCE THE CODE IS RAN
+                            if isinstance(processed, list):
+                                processed = processed[0]
                             data_row = self.data_validatoer.validate(processed)
+                            address_data.data = data_row
                         except Exception as ve:
                             self.logger.log_error(
                                 f"Validation failed, dropping row {processed}",
@@ -69,20 +74,20 @@ class saving_service(base_service):
 
                         if not input_queue:
                             self.distributor.publish(
-                                topic=self.topic, data=data_row
+                                topic=self.topic, data=address_data
                             )
   
                         else:
-                            input_queue.put(data_row.model_dump())
+                            input_queue.put(address_data)
                             input_queue.task_done()
 
                             self.logger.log_info(
                             f"the output queue size: {input_queue.qsize()}"
                             )
 
-                        self.logger.log_info(
-                            f"when inner queue is NOT empty: {data_row}"
-                        )
+                            self.logger.log_info(
+                                f"when inner queue is NOT empty: {data_row}"
+                            )
                         
 
             except Exception as e:

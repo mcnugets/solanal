@@ -63,6 +63,7 @@ class threader_factory:
             #
             logger.name = scraper_type
             scraper_cfg = configs.get(threader_type)
+            
             scrape_specific_cfg = scraper_cfg.get(scraper_type)
             service_wait = scrape_specific_cfg.get("wait")
             service_scraper = scrape_specific_cfg.get("scraper")
@@ -80,6 +81,8 @@ class threader_factory:
             )
             queue_r = queue_resources(data_buffer=Queue(), 
                                       processed_queue=Queue())
+            # we can use this in the future and pass it as a whole to 
+            # scraper thread
             res = context_resources(thread_r=thread_r, 
                                     queue_r=queue_r, 
                                     logger=logger)

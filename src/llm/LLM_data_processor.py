@@ -68,18 +68,12 @@ class llm_data_processor:
 
     def process_data(
         self,
-        data: Annotated[
-            Dict[str, Any],
-            "This dict needs to have keys: pumpfun, gmgn, holders",
-        ],
+        data: valid_data,
     ):
 
         try:
-            validated_data = self.data_validator.validate(data)
-            if not validated_data:
-                return None
 
-            return self.setup_prompt(validated_data)
+            return self.setup_prompt(data)
         except Exception as e:
             self.logger.log_error(error_msg=f"Error processing data:", exc_info=e)
             return None

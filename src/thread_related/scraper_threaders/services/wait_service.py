@@ -22,13 +22,12 @@ class wait_service(base_service):
 
      
 
-    def run(self, input_queue: Queue[BaseModel]):
+    def run(self, input_queue: Queue[ad]):
         while not self.thread_r.stop_event.is_set():
             try:
 
-                data = input_queue.get(timeout=2).model_dump()
-                self.logger.log_info(data["full_address"])
-                validated_data = ad(data=data, address=data["full_address"])
+                data = input_queue.get(timeout=2)
+                self.logger.log_info(data.address)
                 self.is_input_queue = True
                 self.logger.log_info(f"DATA ADDED FROM THE PASSED QUEUE: {data}")
                 self.logger.log_info(f"the gottem data")
@@ -41,7 +40,7 @@ class wait_service(base_service):
                         self.logger.log_error(error_msg="Scraper is not initialized")
                         return
                     # change this to proper encapsualtion solution rather direct access
-                    self.scraper._deque.append(validated_data)
+                    self.scraper._deque.append(data)
                     with self.thread_r.condition:
                         self.thread_r.condition.notify_all()  # Notify that deque has data}
 

@@ -6,7 +6,7 @@ import time
 from colorama import Fore, Style
 from playwright.sync_api import Error, Page, Locator # Add this import
 # Define LocatorType as an alias for By
-
+import re
 
 
 # def scrape_addresses(self):
@@ -112,35 +112,34 @@ class pumpfun_scraper(Base_scraper_p):
                     try:
                         first_cell: Locator = None
                         link_element: Locator = None
-                        if self.div_locator:
-                            
-                            elements = row.locator(self.div_locator).all()
-                            first_cell = elements[1]
-                            link_element = elements[0].locator("a")
-                        else:
-                            first_cell = row
-                            link_element = first_cell.locator('a').all()
+                  
                   
                         # if not first_cell:
                         #     continue
-                        first_cell.wait_for(state='visible', timeout=2000)
-                        fltered_data = self.filter_noise(first_cell.inner_text(timeout=5000))
-                        print(fltered_data)
-                        if fltered_data == None:
+                        row.wait_for(state='visible', timeout=2000)
+                        fltered_data = self.filter_noise(
+                            row.inner_text(timeout=5000))
+                        if not fltered_data:
                             print('the variable is NULL wil vause issues')
                             continue
-                        
-                        noise_links = ["lens.google", "x.com", "instagram", "youtube"]
-                        if link_element: 
-                            href = None
-                            for thelink in link_element:
-                                temp_href = thelink.get_attribute("href")
-                                if any(s in temp_href for s in noise_links):
-                                    continue
-                                href = temp_href
-                                  
-                            address = href.split("/")[-1]
-                            fltered_data += "#" + address
+                        else:
+                            print(fltered_data)
+                            if self.div_locator:
+                            
+                                elements = row.locator(self.div_locator).all()
+                                first_cell = elements[1]
+                                link_element = elements[0].locator("a")
+                            else:
+                                first_cell = row
+                                link_element = first_cell.locator('a').all()
+                            # this bulshit needs to be in the tp_service
+                            if link_element: 
+                                address = self.extract_solana_address_from_url(
+                                    link_element[-1].get_attribute('href')
+                                )
+                    
+                                fltered_data += "#" + address
+                        # bulshit ends here
                         if address in self.seen:
                             print(f"already seen: {address} Skipping..")
                             # time.sleep(3)
@@ -191,4 +190,45 @@ class pumpfun_scraper(Base_scraper_p):
                 error_msg="Error in filter_noise processing",
                 exc_info=e
             )
+            return None
+        
+    # temporarily here but would have to be moved to tp_service
+    def extract_solana_address_from_url(self, url_string: str) -> Optional[str]:
+        try:
+            self._logger.log_warning(f'address url input: {url_string}')
+            if not isinstance(url_string, str) or not url_string.strip():
+                self._logger.log_warning("Invalid URL string provided to extract_solana_address_from_url")
+                return None
+
+            try:
+                pattern_twitter = re.compile(r'q=\(\$?[^\s)]+\s+OR\s+([1-9A-HJ-NP-Za-km-z]{32,44})\)|q=\(([1-9A-HJ-NP-Za-km-z]{32,44})\s+OR\s+\$?[^\s)]+\)')
+                pattern_solscan = re.compile(r'/sol/token/([1-9A-HJ-NP-Za-km-z]{32,44})(?:[/?]|\Z)')
+            except re.error as e:
+                self._logger.log_error(f"Regex compilation error: {str(e)}", exc_info=e)
+                return None
+
+            try:
+                # Try the Twitter pattern first
+                match_twitter = pattern_twitter.search(url_string)
+                if match_twitter:
+                    address = match_twitter.group(1) if match_twitter.group(1) else match_twitter.group(2)
+                    if address and len(address) in range(32, 45):  # Validate length
+                        return address
+            except Exception as e:
+                self._logger.log_error(f"Error processing Twitter pattern: {str(e)}", exc_info=e)
+
+            try:
+                # Try the Solscan pattern
+                match_solscan = pattern_solscan.search(url_string)
+                if match_solscan:
+                    address = match_solscan.group(1)
+                    if address and len(address) in range(32, 45):  # Validate length
+                        return address
+            except Exception as e:
+                self._logger.log_error(f"Error processing Solscan pattern: {str(e)}", exc_info=e)
+            self._logger.log_warning(f'Noen of the methods worked hence we retrbn just url: {url_string}')
+            return url_string
+
+        except Exception as e:
+            self._logger.log_error(f"Unexpected error in extract_solana_address_from_url: {str(e)}", exc_info=e)
             return None

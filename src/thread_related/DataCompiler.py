@@ -5,7 +5,7 @@ import logging
 import time
 from src.core.logger import ScraperLogger as log
 from src.data.llm_model import valid_data
-from src.data.models import Pair_data, Parcel, Address_Data
+from src.data.models import Address_Data, Parcel
 from pydantic import BaseModel, field_validator
 from src.thread_related.distributor import dsitributor
 
@@ -111,24 +111,24 @@ class DataCompiler:
                 )
                 continue
 
-    def _process_single_data(self, source: str, data: Dict):
+    def _process_single_data(self, source: str, data: Address_Data):
         """Process single data item with synchronization"""
         try:
             with self.data_lock:
                 self.logger.log_info('checkung data lock threader data cmpiler')
-                if isinstance(data, Dict):
-                    self.logger.log_info('checking if isinstance is being True')
-                    address = self._extract_address(data)
-                    if address:
-                        self.pending_addresses.add(address)
-                        if address not in self.compiled_data:
-                            self.compiled_data[address] = {}
-                        self.compiled_data[address][source] = data
-                        self.logger.log_info(f"Stored {source} data for address {address}")
 
-                        logging.info(f"Stored {source} data for address {address}")
-                        if self._check_complete(address):
-                            self._output_data(address)
+                self.logger.log_info('checking if isinstance is being True')
+                address = self._extract_address(data)
+                if address:
+                    self.pending_addresses.add(address)
+                    if address not in self.compiled_data:
+                        self.compiled_data[address] = {}
+                    self.compiled_data[address][source] = data.data
+                    self.logger.log_info(f"Stored {source} data for address {address}")
+
+                    logging.info(f"Stored {source} data for address {address}")
+                    if self._check_complete(address):
+                        self._output_data(address)
         except Exception as e:
             logging.error(f"Error processing data from {source}: {e}")
 
@@ -167,30 +167,31 @@ class DataCompiler:
                             )
                             del self.compiled_data[address]
                         except Exception as e:
-                            logging.error(f"Error combining data for {address}: {e}")
-                    else:
-                        missing = set(self.required_sources) - set(sources.keys())
-                        self.logger.log_warning(
-                            f"Address {address} missing sources: {missing}"
-                        )
+                            self.logger.log_error(f"Error combining data for {address}: {e}")
+                 
             except Exception as e:
                 logging.error(f"Error processing entries: {e}")
 
-    def _combine_data(self, sources: Dict[str, Pair_data]) -> Parcel:
+    def _combine_data(self, sources: Dict[str, BaseModel]) -> Parcel:
         """Combine data from different sources into a single Pair_data object"""
-        combined = {
-            keys: sources[keys].raw_data for keys in self.required_sources
-        }
-        return Parcel(data_combined=combined)
+        try:
+            combined = {
+                keys: sources[keys] for keys in self.required_sources
+            }
+            return valid_data(**combined)
+        except KeyError as e:
+            self.logger.log_error(f"Missing required source in data: {e}")
+            raise ValueError(f"Missing required source data: {e}")
+        except Exception as e:
+            self.logger.log_error(f"Error combining data sources: {e}")
+            raise RuntimeError(f"Failed to combine data: {e}")
 
-    def _extract_address(self, data: str | List[str]) -> str:
+    def _extract_address(self, data: Address_Data) -> str:
         """Extract address from data string"""
         try:
-            if isinstance(data, str) and "#" in data:
-                return data.split("#")[-1]
-            if isinstance(data, Dict):
-                return data['full_address']
-            return None
+            address = data.address
+            self.logger.log_info(f"Successfully extracted address: {address}")
+            return address
         except Exception as e:
             logging.error(f"Error extracting address: {e}")
             return None

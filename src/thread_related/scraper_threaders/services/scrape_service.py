@@ -62,6 +62,8 @@ class scrape_service(base_service):
                         self.queue_r.data_buffer.put(temp_pair_data)
 
                         self.thread_r.condition.notify_all()
+                        self.logger.log_info('Added data to the data buffer.' +
+                                             f'the data: {temp_pair_data.data}')
                         # Add data and notify
                     time.sleep(3)
                 except StopIteration:

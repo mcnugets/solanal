@@ -190,16 +190,28 @@ def orchestrator(scrape_manager: Scraper_Manager):
     )
 
     datacompiler = fac.create_data_compiler(configs=CONFIG['global'], distributor=distributor, topic=topic)
-
-    
-
+  
     scrape_manager.add_scraper_v2(solscan)
     datacompiler.start()
  
     scrape_manager.add_scraper_v2(gmgn_two)
     # scrape_manager.add_scraper_v2(gmgn_one)
     scrape_manager.start()
-
+    
+    final = queue_m.get_queue('compiled').get('output_queue')
+    while True:
+        time.sleep(5)
+        if not final.empty():
+            data = final.get()
+            print("\n--- Final Compiled Data ---")
+            print(f"Queue size: {final.qsize()}")
+            print("Data contents:")
+            if hasattr(data, 'model_dump'):  # Check if it's a Pydantic model
+                for field, value in data.model_dump().items():
+                    print(f"{field}: {value}")
+            else:
+                print(data)
+            print("--------------------------\n")
 
 
 

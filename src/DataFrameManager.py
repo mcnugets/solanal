@@ -104,9 +104,11 @@ class DataFrameManager:
             row_dict = self.gmgn_secondary(data)
         return row_dict
 
-    def process_data(self, data: List[str] | Dict) -> Dict:
+    # TODO: gotta change it to make more consistent for isntance make it so that it returns 
+    # dataframe instead as oposed to dict or list
+    def process_data(self, data: List[str] | Dict) -> Dict | List:
         try:
-            if self.columns is None:
+            if not self.columns:
                 return data
   
             # section for adding to queue

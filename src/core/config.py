@@ -389,8 +389,8 @@ CONFIG = {
         "solscan": {
             "scraper": True,
             "wait": True,
-            "save": False,
-            "process": True,
+            "save": True,
+            "process": False,
             "scraper_configs": SCRAPER_CONFIGS_2["solscan"],
             "columns": [],
             "patterns": {},

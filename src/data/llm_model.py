@@ -181,9 +181,9 @@ class holders_data(BaseModel):
     class Config:
         populate_by_name = True  # Allows both original and alias names
 
-
+# TODO: GOTTA WORK ON THIS VALIDATION NOT SURE HOW TO PROPERLY STRUCTURE IT
 class valid_data(BaseModel):
-    pumpfun_data: gmgn_main_data | PumpfunData | None = None
+    gmgn_2: gmgn_main_data | PumpfunData | None =  Field(None, alias="gmgn_2")
     gmgn_data_: gmgn_data | None = None
     holders: holders_data | None = None
 
