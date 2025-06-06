@@ -82,7 +82,7 @@ class llm_data_processor:
         try:
             columns = ["**Field**", "**Value**"]
             main_token_data = self.setup_token_data(
-                validated_data.pumpfun_data, columns
+                validated_data.main, columns
             )
             gmgn_data = self.setup_gmgn_data(validated_data.gmgn_data_, columns)
             holders = self.setup_holders(validated_data.holders)
@@ -107,22 +107,27 @@ class llm_data_processor:
 {divider}"""
 
         except Exception as e:
-            self.logger.error(f"Error setting up prompt: {e}")
+            self.logger.log_error(error_msg="Error setting up prompt", exc_info=e)
             return None
 
     def setup_holders(self, holders: holders_data):
+        if not holders:
+            return None
         holders_dict = holders.model_dump()
         print(holders_dict)
         holders_df = pd.DataFrame.from_dict(holders_dict)
-        return holders_df.to_string()
-
+        return holders_df
     # ["**Field**", "**Value**"]
     def setup_token_data(self, token_data: gmgn_main_data, columns: List[str]):
+        if not token_data:
+            return None
         token_df = pd.DataFrame.from_dict(token_data)
         token_df.columns = columns
         return token_df.to_string(index=False)
 
     def setup_gmgn_data(self, gmgn_data: gmgn_data, columns: List[str]):
+        if not gmgn_data:
+            return None
         gmgn_df = pd.DataFrame.from_dict(gmgn_data)
         gmgn_df.columns = columns
 

@@ -47,7 +47,7 @@ from pathlib import Path
 from typing import Dict, Any
 import ollama  # Ensure you have installed the Ollama Python library
 from typing import Optional, List, Dict
-
+import json
 from src import ScraperLogger as logger
 from src import valid_data
 from collections import deque
@@ -94,9 +94,10 @@ class llm_analyser:
             _input = self.complete_prompt(
                 prompt, self.assistant_input, self.conversation_history
             )
+     
 
-            self.save_analysis(_input[-1], batched_data=self.batch_size)
-            logging.info("Sending prompt to LLM model...")
+            self.save_analysis(_input, batched_data=self.batch_size)
+            self.logger.log_info("Sending prompt to LLM model...")
             print("Sending prompt to LLM model...")
 
             response = ollama.chat(model=self.model, messages=_input)
@@ -105,16 +106,16 @@ class llm_analyser:
             msg = msg_arr[1]
             self.assistant_input = msg
 
-            logging.info("Analysis received successfully")
-            logging.info(response.done_reason)
-            logging.info(f"Eval count:{response.eval_count}")
-            logging.info(f"Eval dur:{response.eval_duration}")
-            logging.info(f"Eval prompt count:{response.prompt_eval_count}")
-            logging.info(f"Eval prompt dur:{response.prompt_eval_duration}")
+            self.logger.log_info("Analysis received successfully")
+            self.logger.log_info(response.done_reason)
+            self.logger.log_info(f"Eval count:{response.eval_count}")
+            self.logger.log_info(f"Eval dur:{response.eval_duration}")
+            self.logger.log_info(f"Eval prompt count:{response.prompt_eval_count}")
+            self.logger.log_info(f"Eval prompt dur:{response.prompt_eval_duration}")
 
             return msg
         except Exception as e:
-            logging.error(f"LLM analysis() in LLM_processor error: {e}")
+            self.logger.log_error(f"LLM analysis() in LLM_processor error: {e}")
             raise RuntimeError(f"Error in LLM analysis(): {str(e)}")
 
     def save_analysis(self, last_added_data, batched_data):
@@ -127,20 +128,27 @@ class llm_analyser:
 
                 if check_file.exists():
                     try:
-                        get_saved_batches = pd.read_json("conversation_history.json")
+                        if check_file.stat().st_size>0:
+                            get_saved_batches = pd.read_json(check_file)
+                        else:
+                            get_saved_batches = pd.DataFrame()
+                        
+                     
                         new_batches = pd.concat(
                             [get_saved_batches, saved_batch], ignore_index=True
                         )
-                    except ValueError as e:
-                        logging.error(f"Error reading JSON file: {e}")
-                        return
                     except pd.errors.EmptyDataError:
                         logging.error("JSON file is empty")
                         return
-
+                
+                    except ValueError as e:
+                        logging.error(f"Error reading JSON file: {e}")
+                        return
+                 
+                
                 try:
                     self.temp_conversation_history.clear()
-                    new_batches.to_json("conversation_history.json")
+                    new_batches.to_json(check_file, indent=4)
                 except IOError as e:
                     logging.error(f"Error saving to JSON file: {e}")
 
