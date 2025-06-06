@@ -1,4 +1,4 @@
-# llm solana analaizah
+# solanal
 
 > [!WARNING]  
 > 🚧 KEEP IN MIND THAT THE PROJECT IS UNDER DEVELOPMENT 🚧
