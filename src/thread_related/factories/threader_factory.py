@@ -29,6 +29,10 @@ from src.scrapers.playwright.solscan_scraper import solscan_scraper
 from src.thread_related.DataCompiler import DataCompiler, validate_sources
 from src.core.config import queue_m
 from src.thread_related.distributor import dsitributor
+from src.llm.LLM_threading import llm_threader
+from src.llm.LLM_data_processor import llm_data_processor
+from src.llm.LLM_processor import llm_analyser
+from src.thread_related.scraper_threaders.Ithreader import Ithreader
 
 @dataclass
 class context_resources:
@@ -49,21 +53,38 @@ class threader_factory:
         threader_type: str,
         configs: Dict,
         topic: str,
-        distributor:dsitributor,
+        distributor: dsitributor | None = None,
         scraper_type: str | None = None,
-        input_queue: Queue | None = None,
-        output_queue: Queue | None = None,
-     
-    ):
-        
-        topic = topic
 
-        distributor.add_topic(topic=topic)
+     
+    ) -> Ithreader | llm_threader:
+
+        topic = topic
+        input_queue = None
+        output_queue = None
+        print("are you even working")
+        if scraper_type:
+            input_queue_name = (
+                configs.get(threader_type).get(scraper_type).get("input_queue")
+            )
+            output_queue_name = (
+                configs.get(threader_type).get(scraper_type).get("output_queue")
+            )
+        else:
+
+            input_queue_name = configs.get(threader_type).get("input_queue")
+            output_queue_name = configs.get(threader_type).get("output_queue")  
+
+        if input_queue_name:
+            input_queue = queue_m.get_queue(input_queue_name)["output_queue"]
+        if output_queue_name:
+            output_queue = queue_m.get_queue(output_queue_name)["output_queue"]
+
         if threader_type == "scrapers":
             #
             logger.name = scraper_type
             scraper_cfg = configs.get(threader_type)
-            
+
             scrape_specific_cfg = scraper_cfg.get(scraper_type)
             service_wait = scrape_specific_cfg.get("wait")
             service_scraper = scrape_specific_cfg.get("scraper")
@@ -81,7 +102,7 @@ class threader_factory:
             )
             queue_r = queue_resources(data_buffer=Queue(), 
                                       processed_queue=Queue())
-            # we can use this in the future and pass it as a whole to 
+            # we can use this in the future and pass it as a whole to
             # scraper thread
             res = context_resources(thread_r=thread_r, 
                                     queue_r=queue_r, 
@@ -120,7 +141,7 @@ class threader_factory:
                     patterns=scrape_specific_cfg["patterns"],
                     cleaning_pat=configs["global"]["cleaning_patterns"],
                 )
-           
+
             return scraper_thread(
                 name=scraper_type,
                 logger=logger,
@@ -136,11 +157,37 @@ class threader_factory:
                 topic=topic,
             )
         elif threader_type == "llm":
-            pass
+            try:
+                llm_config = configs.get(threader_type)
+                if not llm_config:
+                    raise ValueError(
+                        f"Missing LLM configuration for threader type: {threader_type}"
+                    )
+
+                llmp = cls.create_llm_processor(logger=logger)
+                if not llmp:
+                    raise RuntimeError("Failed to create LLM processor")
+
+                anal = cls.create_llm_anal(
+                    logger=logger, config=llm_config, llm_proc=llmp
+                )
+                if not anal:
+                    raise RuntimeError("Failed to create LLM analyzer")
+                print("are you even working")
+                return cls.creater_llm_threader(
+                    logger=logger,
+                    input_queue=input_queue,
+                    output_queue=output_queue,
+                    llm_analyser=anal,
+                )
+            except KeyError as e:
+                raise ValueError(f"Configuration error: {str(e)}")
+            except Exception as e:
+                raise RuntimeError(f"Failed to create LLM threader: {str(e)}")
 
     @classmethod
     def create_data_compiler(
-        self,
+        cls,
         distributor: dsitributor,
         topic: str,
         configs: Dict
@@ -283,3 +330,62 @@ class threader_factory:
             queue_r=res.queue_r,
             text_processor=text_p,
         )
+
+    @classmethod
+    def create_llm_processor(cls, logger: log):
+        try:
+
+            return llm_data_processor(logger=logger)
+        except ValueError as ve:
+            logger.log_error(f"Validation error creating llm_data_processor: {str(ve)}")
+            raise
+        except Exception as e:
+            logger.log_error(f"Unexpected error creating llm_data_processor: {str(e)}")
+            raise
+
+    @classmethod
+    def create_llm_anal(cls, logger: log, config: Dict, llm_proc: llm_data_processor):
+        try:
+            if not all([logger, config, llm_proc]):
+                raise ValueError("Missing required arguments for llm_analyser creation")
+            if "batch" not in config or "model" not in config:
+                raise ValueError("Config missing required keys 'batch' or 'model'")
+
+            batch_size = config["batch"]
+            model = config["model"]
+            return llm_analyser(
+                model=model,
+                batch_size=batch_size,
+                logger=logger,
+                llm_data_processor=llm_proc,
+            )
+        except ValueError as ve:
+            logger.log_error(f"Validation error creating llm_analyser: {str(ve)}")
+            raise
+        except Exception as e:
+            logger.log_error(f"Unexpected error creating llm_analyser: {str(e)}")
+            raise
+
+    # this shit would need to be grouped totether with scraper thread
+    # we need ot refactor the cdoe so that the ting originally comes from
+    # parent class: base_threader
+    @classmethod
+    def creater_llm_threader(
+        cls, logger: log, input_queue: Queue, output_queue: Queue, llm_analyser
+    ) -> llm_threader:
+        try:
+            if not all([logger, input_queue, llm_analyser]):
+                raise ValueError("Missing required arguments for llm_threader creation")
+
+            return llm_threader(
+                logger=logger,
+                input_queue=input_queue,
+                output_queue=output_queue,
+                llm_anal=llm_analyser,
+            )
+        except ValueError as ve:
+            logger.log_error(f"Validation error creating llm_threader: {str(ve)}")
+            raise
+        except Exception as e:
+            logger.log_error(f"Unexpected error creating llm_threader: {str(e)}")
+            raise
