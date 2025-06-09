@@ -197,7 +197,7 @@ class threader_factory:
             col: queue_m.get_queue(col)["output_queue"]
             for col in configs['data_sources']
         }
-        distributor.add_topic(topic=topic)
+        # distributor.add_topic(topic=topic)
         data_sources = validate_sources(
             gmgn_2=configs["data_sources"][0],
             holders=configs["data_sources"][1]
@@ -234,7 +234,7 @@ class threader_factory:
                         f"Missing scraper_configs for {scraper_type}"
                     )
                 return gmgn_scraper(**configs)
-            elif scraper_type == "solscan":
+            elif scraper_type == "holders":
                 if not configs:
                     raise ValueError(
                         f"Missing scraper_configs for {scraper_type}"
@@ -291,7 +291,7 @@ class threader_factory:
             vlaidator = gmgn_two_validator()
         elif scraper_type == "gmgn":
             vlaidator = gmgm_validator()
-        elif scraper_type == "solscan":
+        elif scraper_type == "holders":
             vlaidator = holders_validator()
 
         df_manager = dfm(

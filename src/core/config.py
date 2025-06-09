@@ -17,6 +17,7 @@ GLOBAL_CONFIG = {
 queue_m = queue_manager()
 
 queue_m.add_queue(GLOBAL_CONFIG["data_sources"])
+queue_m.add_queue("to_holders")
 queue_m.add_queue(["compiled", "final"])  # Add new queue for compiled data
 
 # incorporate DATA_SOURCES into configs but later
@@ -374,6 +375,7 @@ CONFIG = {
             "patterns": PATTERNS["gmgn_2"],
             "base_file": "pumpfun_data.csv",
             "input_queue": None,
+            "output_queue": None
         },
         "gmgn": {
             "scraper": True,
@@ -385,8 +387,9 @@ CONFIG = {
             "patterns": PATTERNS["gmgn"],
             "base_file": "gmgn_data.csv",
             "input_queue": "gmgn_2",  # Input queue changes depending on is predecessing operation type
+            "output_queue": "gmgn"
         },
-        "solscan": {
+        "holders": {
             "scraper": True,
             "wait": True,
             "save": True,
@@ -395,8 +398,14 @@ CONFIG = {
             "columns": [],
             "patterns": {},
             "base_file": "",
-            "input_queue": "gmgn",
+            "input_queue": "to_holders",
+            "output_queue": "holders"
         },
     },
-    "llm": {},
+    "llm": {
+        "batch": 1,
+        "model": "deepseek-r1:7b",
+        "input_queue": "compiled",
+        "output_queue": "final"
+    },
 }
